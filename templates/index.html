@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HuGe VisiON</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+        }
+    </style>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+    <div id="instructions">
+        <h3>Controls:</h3>
+        <p>Left click + drag: Rotate view</p>
+        <p>Right click + drag: Pan view</p>
+        <p>Scroll: Zoom in/out</p>
+        <p>WASD / Arrow keys: Move camera</p>
+        <p>Q: Move forward, E: Move backward</p>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="{{ url_for('static', filename='visualization.js') }}"></script>
+</body>
+</html>
