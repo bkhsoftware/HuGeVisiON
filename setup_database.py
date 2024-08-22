@@ -1,11 +1,12 @@
 import psycopg2
+from config import Config
 
 def setup_database():
     conn = psycopg2.connect(
-        dbname="huge_vision",
-        user="bjornkennethholmstrom",
-        password="HimitsuDesu009",
-        host="localhost"
+        dbname=Config.DB_NAME
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        host=Config.DB_HOST
     )
     cursor = conn.cursor()
 

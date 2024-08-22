@@ -1,5 +1,6 @@
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from config import Config
 
 def reset_database():
     # Ask for confirmation
@@ -10,10 +11,10 @@ def reset_database():
 
     # Connect to the default 'postgres' database
     conn = psycopg2.connect(
-        dbname="postgres",
-        user="bjornkennethholmstrom",
-        password="HimitsuDesu009",
-        host="localhost"
+        dbname="postgres",  # Keep this as is for initial connection
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        host=Config.DB_HOST
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()
@@ -40,10 +41,10 @@ def reset_database():
 
     # Now connect to the new huge_vision database and create tables
     conn = psycopg2.connect(
-        dbname="huge_vision",
-        user="bjornkennethholmstrom",
-        password="HimitsuDesu009",
-        host="localhost"
+        dbname=Config.DB_NAME
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        host=Config.DB_HOST
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()

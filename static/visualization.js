@@ -1,4 +1,7 @@
 let scene, camera, renderer, nodes = {}, lines = {}, controls;
+let currentPage = 1;  // Define currentPage in the global scope
+const perPage = 100;
+let totalPages = 1;
 
 function init() {
     scene = new THREE.Scene();
@@ -37,7 +40,48 @@ function init() {
     directionalLight.position.set(0, 1, 0);
     scene.add(directionalLight);
 
-    loadNodes();
+    loadNodesInView();
+}
+
+function loadNodesInView() {
+    const position = camera.position;
+    const url = `/api/nodes?page=${currentPage}&per_page=${perPage}&x=${position.x}&y=${position.y}&z=${position.z}&radius=1000`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            console.log(`Loaded ${data.nodes.length} nodes`);
+            totalPages = data.total_pages;
+            data.nodes.forEach(addNode);
+            
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadNodesInView();
+            } else {
+                currentPage = 1;
+                loadConnections();
+            }
+        })
+        .catch(error => console.error('Error loading nodes:', error));
+}
+
+function loadConnections() {
+    const nodeIds = Object.keys(nodes);
+    const url = `/api/connections?node_ids=${nodeIds.join(',')}&page=${currentPage}&per_page=${perPage}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            console.log(`Loaded ${data.connections.length} connections`);
+            totalPages = data.total_pages;
+            data.connections.forEach(addConnection);
+            
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadConnections();
+            }
+        })
+        .catch(error => console.error('Error loading connections:', error));
 }
 
 function onKeyDown(event) {
@@ -66,27 +110,7 @@ function onKeyDown(event) {
             camera.position.z += moveDistance;
             break;
     }
-}
-
-function loadNodes() {
-    fetch('/api/nodes')
-        .then(response => response.json())
-        .then(data => {
-            console.log(`Loaded ${data.length} nodes`);
-            data.forEach(addNode);
-            loadConnections();
-        })
-        .catch(error => console.error('Error loading nodes:', error));
-}
-
-function loadConnections() {
-    fetch('/api/connections')
-        .then(response => response.json())
-        .then(data => {
-            console.log(`Loaded ${data.length} connections`);
-            data.forEach(addConnection);
-        })
-        .catch(error => console.error('Error loading connections:', error));
+    loadNodesInView(); // Reload nodes after camera movement
 }
 
 function addNode(node) {
