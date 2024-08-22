@@ -58,7 +58,16 @@ def get_nodes():
 @app.route('/api/connections')
 def get_connections():
     node_ids = request.args.get('node_ids', '').split(',')
-    node_ids = [int(id) for id in node_ids if id]
+    node_ids = [int(id) for id in node_ids if id and id.lower() != 'undefined']
+    
+    if not node_ids:
+        return jsonify({
+            'connections': [],
+            'page': 1,
+            'per_page': 0,
+            'total_pages': 0,
+            'total_count': 0
+        })
     
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 100))

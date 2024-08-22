@@ -2,6 +2,9 @@ let scene, camera, renderer, nodes = {}, lines = {}, controls;
 let currentPage = 1;  // Define currentPage in the global scope
 const perPage = 100;
 let totalPages = 1;
+let loadedNodes = new Set();
+let loadedConnections = new Set();
+const MAX_CONNECTIONS = 1000; // Set a maximum number of connections to display
 
 function init() {
     scene = new THREE.Scene();
@@ -66,19 +69,24 @@ function loadNodesInView() {
 }
 
 function loadConnections() {
-    const nodeIds = Object.keys(nodes);
+    const nodeIds = Object.keys(nodes).filter(id => id !== 'undefined');
+    if (nodeIds.length === 0) {
+        console.log("No valid node IDs to load connections for.");
+        return;
+    }
     const url = `/api/connections?node_ids=${nodeIds.join(',')}&page=${currentPage}&per_page=${perPage}`;
     
     fetch(url)
         .then(response => response.json())
         .then(data => {
             console.log(`Loaded ${data.connections.length} connections`);
-            totalPages = data.total_pages;
             data.connections.forEach(addConnection);
             
-            if (currentPage < totalPages) {
+            if (currentPage < data.total_pages && loadedConnections.size < MAX_CONNECTIONS) {
                 currentPage++;
                 loadConnections();
+            } else {
+                console.log(`Reached maximum connections (${loadedConnections.size}) or all pages loaded.`);
             }
         })
         .catch(error => console.error('Error loading connections:', error));
@@ -123,6 +131,10 @@ function addNode(node) {
 }
 
 function addConnection(connection) {
+    if (loadedConnections.size >= MAX_CONNECTIONS) {
+        return; // Don't add more connections if we've reached the limit
+    }
+
     const startNode = nodes[connection.from_node_id];
     const endNode = nodes[connection.to_node_id];
 
@@ -147,6 +159,7 @@ function addConnection(connection) {
     const line = new THREE.Line(geometry, material);
     scene.add(line);
     lines[connection.id] = line;
+    loadedConnections.add(connection.id);
 }
 
 function getColorForType(type) {

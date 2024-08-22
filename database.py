@@ -18,7 +18,7 @@ class Database:
             Database._instance = self
             self.conn = None
             self.cursor = None
-            self.connect()  # Establish connection when instance is created
+            self.connect()
 
     def connect(self):
         if self.conn is None:

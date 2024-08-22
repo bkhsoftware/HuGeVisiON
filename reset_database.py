@@ -1,63 +1,76 @@
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from config import Config
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def reset_database():
-    # Ask for confirmation
-    confirm = input("This will delete all data in the 'huge_vision' database. Are you sure? (y/n): ")
-    if confirm.lower() != 'y':
-        print("Database reset cancelled.")
-        return
-
     # Connect to the default 'postgres' database
     conn = psycopg2.connect(
-        dbname="postgres",  # Keep this as is for initial connection
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
-        host=Config.DB_HOST
+        dbname="postgres",
+        user=os.getenv('DB_USER'),
+        password=os.getenv('DB_PASSWORD'),
+        host=os.getenv('DB_HOST', 'localhost')
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()
 
-    # Terminate all connections to the huge_vision database
-    cur.execute("""
+    db_name = os.getenv('DB_NAME', 'huge_vision')
+
+    # Terminate all connections to the database
+    cur.execute(f"""
     SELECT pg_terminate_backend(pg_stat_activity.pid)
     FROM pg_stat_activity
-    WHERE pg_stat_activity.datname = 'huge_vision'
+    WHERE pg_stat_activity.datname = '{db_name}'
     AND pid <> pg_backend_pid();
     """)
 
-    # Drop the huge_vision database if it exists
-    cur.execute("DROP DATABASE IF EXISTS huge_vision")
-    print("Dropped existing huge_vision database if it existed.")
+    # Drop the database if it exists
+    cur.execute(f"DROP DATABASE IF EXISTS {db_name}")
+    print(f"Dropped existing {db_name} database if it existed.")
 
-    # Create a new huge_vision database
-    cur.execute("CREATE DATABASE huge_vision")
-    print("Created new huge_vision database.")
+    # Create a new database
+    cur.execute(f"CREATE DATABASE {db_name}")
+    print(f"Created new {db_name} database.")
 
     # Close the connection to the 'postgres' database
     cur.close()
     conn.close()
 
-    # Now connect to the new huge_vision database and create tables
+    # Connect to the new database and create tables
     conn = psycopg2.connect(
-        dbname=Config.DB_NAME
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
-        host=Config.DB_HOST
+        dbname=db_name,
+        user=os.getenv('DB_USER'),
+        password=os.getenv('DB_PASSWORD'),
+        host=os.getenv('DB_HOST', 'localhost')
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()
 
-    # Enable cube extension
-    cur.execute("CREATE EXTENSION IF NOT EXISTS cube")
+    # Create tables
+    cur.execute("""
+    CREATE TABLE Nodes (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        x FLOAT NOT NULL,
+        y FLOAT NOT NULL,
+        z FLOAT NOT NULL,
+        url VARCHAR(255)
+    )
+    """)
 
-    # Read and execute the SQL from network_schema.sql
-    with open('database/network_schema.sql', 'r') as schema_file:
-        cur.execute(schema_file.read())
+    cur.execute("""
+    CREATE TABLE Connections (
+        id SERIAL PRIMARY KEY,
+        from_node_id INTEGER REFERENCES Nodes(id),
+        to_node_id INTEGER REFERENCES Nodes(id),
+        type VARCHAR(50) NOT NULL
+    )
+    """)
 
-    conn.commit()
-    print("Created tables in huge_vision database.")
+    print("Created tables in the database.")
 
     # Close the connection
     cur.close()
