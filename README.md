@@ -1,6 +1,6 @@
 # HuGe VisiON (Huge General Visualizer in Open Networks)
 
-Version: 0.1.0
+Version: 0.2.0
 
 HuGe VisiON is a powerful 3D visualization tool designed to present dynamically updated, large and accurate trees of relations which can be browsed online. This project aims to provide a new and exciting way to discover ideas, people, and foster a sense of interconnectedness across various domains.
 
@@ -15,6 +15,10 @@ Present dynamically updated, large and accurate trees of relations which can be 
 - Color-coded nodes and connections based on entity and relationship types
 - Dynamic loading of data from a PostgreSQL database
 - Scalable architecture to handle large, complex networks
+- Pagination and spatial querying for improved performance with large datasets
+- User-adjustable settings for maximum connections, maximum nodes, and render distance
+- Modular architecture supporting different visualization modes
+- AI Knowledge Base mode as an example of a specialized visualization mode
 
 ## Prerequisites
 
@@ -23,6 +27,7 @@ Present dynamically updated, large and accurate trees of relations which can be 
 - Flask
 - psycopg2
 - Three.js (loaded via CDN)
+- dotenv (for environment variable management)
 
 ## Installation
 
@@ -40,10 +45,17 @@ Present dynamically updated, large and accurate trees of relations which can be 
 
 3. Install the required Python packages:
    ```
-   pip install Flask psycopg2-binary
+   pip install Flask psycopg2-binary python-dotenv
    ```
 
-4. Set up your PostgreSQL database and update the connection details in `database.py`.
+4. Set up your PostgreSQL database and create a `.env` file with your database credentials:
+   ```
+   DB_NAME=huge_vision
+   DB_USER=your_username
+   DB_PASSWORD=your_password
+   DB_HOST=localhost
+   SECRET_KEY=your_secret_key
+   ```
 
 5. Run the database setup script:
    ```
@@ -71,6 +83,8 @@ Present dynamically updated, large and accurate trees of relations which can be 
    - WASD / Arrow keys: Move camera
    - Q: Move forward, E: Move backward
 
+4. Adjust the visualization settings using the control panel on the right side of the screen.
+
 ## Project Structure
 
 - `app.py`: Flask application server
@@ -78,7 +92,9 @@ Present dynamically updated, large and accurate trees of relations which can be 
 - `reset_database.py`: Script to reset and initialize the database
 - `generate_test_data.py`: Script to generate sample data
 - `static/visualization.js`: 3D visualization logic using Three.js
+- `static/ai-knowledge-base-mode.js`: Example specialized visualization mode
 - `templates/index.html`: Main HTML template
+- `.env`: Environment variables for database configuration (not tracked in git)
 
 ## Extending the Network
 
@@ -89,6 +105,12 @@ HuGe VisiON is designed to be flexible and accommodate various types of entities
 3. Update the `Connections` table to include new relationship types.
 4. Modify the `getColorForConnectionType` function in `visualization.js` for new relationship types.
 
+To create a new visualization mode:
+
+1. Create a new JavaScript file in the `static` folder (e.g., `my-new-mode.js`).
+2. Implement the required mode functions (activate, deactivate, interpretData, etc.).
+3. Register the new mode in `visualization.js` using the `registerMode` function.
+
 ## Future Plans
 
 - Implement user authentication and personal networks
@@ -96,6 +118,7 @@ HuGe VisiON is designed to be flexible and accommodate various types of entities
 - Develop algorithms for suggesting connections and discovering patterns
 - Create a more advanced search and filter system
 - Optimize performance for very large networks
+- Implement more specialized visualization modes
 
 ## Contributing
 

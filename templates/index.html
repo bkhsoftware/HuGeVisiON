@@ -5,32 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HuGe VisiON</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #controls label, #controls select {
+            display: block;
+            margin-bottom: 5px;
+        }
+        #controls input, #controls select {
+            width: 100%;
+            margin-bottom: 10px;
+        }
         #instructions {
             position: absolute;
             top: 10px;
             left: 10px;
+            background: rgba(0,0,0,0.7);
             color: white;
-            background-color: rgba(0,0,0,0.5);
             padding: 10px;
-            font-family: Arial, sans-serif;
-            z-index: 100;
+            border-radius: 5px;
         }
     </style>
-    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 <body>
     <div id="instructions">
         <h3>Controls:</h3>
-        <p>Left click + drag: Rotate view</p>
-        <p>Right click + drag: Pan view</p>
-        <p>Scroll: Zoom in/out</p>
-        <p>WASD / Arrow keys: Move camera</p>
-        <p>Q: Move forward, E: Move backward</p>
+        <ul>
+            <li>Left click + drag: Rotate view</li>
+            <li>Right click + drag: Pan view</li>
+            <li>Scroll: Zoom in/out</li>
+            <li>WASD / Arrow keys: Move camera</li>
+            <li>Q: Move forward, E: Move backward</li>
+        </ul>
     </div>
+    <div id="controls">
+        <select id="modeSelect">
+            <option value="">Select a mode</option>
+        </select>
+        
+        <label for="maxConnections">Max Connections: <span id="maxConnectionsValue">1000</span></label>
+        <input type="range" id="maxConnections" min="100" max="5000" step="100" value="1000">
+        
+        <label for="maxNodes">Max Nodes: <span id="maxNodesValue">1000</span></label>
+        <input type="range" id="maxNodes" min="100" max="5000" step="100" value="1000">
+        
+        <label for="renderDistance">Render Distance: <span id="renderDistanceValue">1000</span></label>
+        <input type="range" id="renderDistance" min="100" max="2000" step="100" value="1000">
+
+    <!-- Load Three.js first -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Load OrbitControls from jsDelivr -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // Add this to check if Three.js and OrbitControls are loaded
+        console.log('Three.js loaded:', typeof THREE !== 'undefined');
+        console.log('OrbitControls loaded:', typeof THREE.OrbitControls !== 'undefined');
+    </script>
+    
+    <!-- Load your custom scripts last -->
     <script src="{{ url_for('static', filename='visualization.js') }}"></script>
+    <script src="{{ url_for('static', filename='ai-knowledge-base-mode.js') }}"></script>
 </body>
 </html>
