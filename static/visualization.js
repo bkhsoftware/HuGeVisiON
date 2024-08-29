@@ -25,8 +25,8 @@ let hoveredNode = null;
 let infoPanel;
 let infoPanelTimeout;
 let infoPanelHideTimeout;
-const SHOW_DELAY = 300; // 0.5 second delay before showing
-const HIDE_DELAY = 800; // 1 second delay before hiding
+const SHOW_DELAY = 300; // 0.3 second delay before showing
+const HIDE_DELAY = 800; // 0.8 second delay before hiding
 
 let pinnedNode = null;
 
@@ -188,8 +188,6 @@ function setMode(modeName) {
 function createInfoPanel() {
     infoPanel = document.createElement('div');
     infoPanel.style.position = 'absolute';
-    infoPanel.style.top = '10px';
-    infoPanel.style.right = '10px';
     infoPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     infoPanel.style.color = 'white';
     infoPanel.style.padding = '10px';
@@ -219,12 +217,73 @@ function positionInfoPanelAtNode(node) {
     const widthHalf = window.innerWidth / 2;
     const heightHalf = window.innerHeight / 2;
 
-    const x = (vector.x * widthHalf) + widthHalf;
-    const y = - (vector.y * heightHalf) + heightHalf;
+    let x = (vector.x * widthHalf) + widthHalf;
+    let y = -(vector.y * heightHalf) + heightHalf;
+
+    // Position the panel above the node
+    y -= 20; // Offset to position above the node
+
+    // Ensure the panel stays within the window bounds
+    const panelRect = infoPanel.getBoundingClientRect();
+    x = Math.max(panelRect.width / 2, Math.min(x, window.innerWidth - panelRect.width / 2));
+    y = Math.max(panelRect.height, Math.min(y, window.innerHeight - 20)); // 20px margin from bottom
 
     infoPanel.style.left = `${x}px`;
     infoPanel.style.top = `${y}px`;
-    infoPanel.style.transform = 'translate(-50%, -100%)'; // Position above the node
+    infoPanel.style.transform = 'translate(-50%, -100%)'; // Center horizontally and position above
+
+    // Ensure the panel is fully visible
+    keepPanelInView(infoPanel);
+}
+
+function keepPanelInView(panel) {
+    const rect = panel.getBoundingClientRect();
+    
+    if (rect.left < 0) {
+        panel.style.left = '0px';
+        panel.style.transform = 'translate(0, -100%)';
+    }
+    if (rect.right > window.innerWidth) {
+        panel.style.left = `${window.innerWidth - rect.width}px`;
+        panel.style.transform = 'translate(0, -100%)';
+    }
+    if (rect.top < 0) {
+        panel.style.top = '0px';
+        panel.style.transform = 'translate(-50%, 0)';
+    }
+    if (rect.bottom > window.innerHeight) {
+        panel.style.top = `${window.innerHeight - rect.height}px`;
+        panel.style.transform = 'translate(-50%, 0)';
+    }
+}
+
+function hideInfoPanelWithDelay() {
+    clearTimeout(infoPanelHideTimeout);
+    infoPanelHideTimeout = setTimeout(() => {
+        hideNodeInfo();
+    }, HIDE_DELAY);
+}
+
+function positionPanelWithinWindow(panel) {
+    const rect = panel.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        panel.style.left = `${window.innerWidth - rect.width}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+        panel.style.top = `${window.innerHeight - rect.height}px`;
+    }
+    if (rect.left < 0) {
+        panel.style.left = '0px';
+    }
+    if (rect.top < 0) {
+        panel.style.top = '0px';
+    }
+}
+
+function onMouseMove(event) {
+    // Calculate mouse position in normalized device coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
 }
 
 function showInfoPanelWithDelay(node) {
@@ -241,12 +300,6 @@ function hideInfoPanelWithDelay() {
     infoPanelHideTimeout = setTimeout(() => {
         hideNodeInfo();
     }, HIDE_DELAY);
-}
-
-function onMouseMove(event) {
-    // Calculate mouse position in normalized device coordinates
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
 }
 
 function checkNodeHover() {
@@ -274,13 +327,12 @@ function showNodeInfo(node) {
     }
 
     const nodeData = node.userData;
-    
+
     let infoHTML = `
         <h3>${nodeData.name || 'Unnamed Node'}</h3>
         <p>Type: ${nodeData.type || 'Unspecified'}</p>
     `;
 
-    // Only add position information if it exists
     if (typeof nodeData.x === 'number' && 
         typeof nodeData.y === 'number' && 
         typeof nodeData.z === 'number') {
@@ -315,6 +367,7 @@ function editNodeInfo(nodeId) {
         </select>
         <button onclick="saveNodeInfo(${nodeId})">Save</button>
     `;
+    positionInfoPanelAtNode(node);
 }
 
 function saveNodeInfo(nodeId) {
@@ -349,6 +402,7 @@ function saveNodeInfo(nodeId) {
     .catch((error) => {
         console.error('Error updating node:', error);
     });
+    positionPanelWithinWindow(editPanel);
 }
 
 function loadNodesInView() {
