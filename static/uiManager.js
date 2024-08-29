@@ -1,5 +1,5 @@
 import { camera } from './core.js';
-import { nodes, pinnedNode } from './nodeManager.js';
+import { nodes, pinnedNode, setPinnedNode } from './nodeManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
 import * as THREE from './lib/three.module.js';
@@ -76,6 +76,7 @@ export function showNodeInfo(node) {
     }
 
     const nodeData = node.userData;
+    const isPinned = pinnedNode === node;
 
     let infoHTML = `
         <h3>${nodeData.name || 'Unnamed Node'}</h3>
@@ -92,15 +93,29 @@ export function showNodeInfo(node) {
         `;
     }
 
-    infoHTML += `<button id="editNodeButton">Edit</button>`;
+    infoHTML += `
+        <button id="editNodeButton">Edit</button>
+        <button id="pinNodeButton">${isPinned ? 'Unpin' : 'Pin'}</button>
+    `;
 
     infoPanel.innerHTML = infoHTML;
-    
-    // Add event listener to the edit button
+
+    // Add event listeners to the buttons
     document.getElementById('editNodeButton').addEventListener('click', () => editNodeInfo(nodeData.id));
-    
+    document.getElementById('pinNodeButton').addEventListener('click', () => togglePinNode(node));
+
     infoPanel.style.display = 'block';
     positionInfoPanelAtNode(node);
+}
+
+export function togglePinNode(node) {
+    if (pinnedNode === node) {
+        setPinnedNode(null);
+        document.getElementById('pinNodeButton').textContent = 'Pin';
+    } else {
+        setPinnedNode(node);
+        document.getElementById('pinNodeButton').textContent = 'Unpin';
+    }
 }
 
 export function hideNodeInfo() {
@@ -155,13 +170,16 @@ export function saveNodeInfo(nodeId) {
     .then(response => response.json())
     .then(data => {
         console.log('Node updated successfully:', data);
-        showNodeInfo(node);
+        if (pinnedNode && pinnedNode.userData.id === nodeId) {
+            showNodeInfo(node);
+        } else {
+            hideInfoPanelWithDelay();
+        }
     })
     .catch((error) => {
         console.error('Error updating node:', error);
     });
     
-    // Position the info panel correctly after saving
     positionInfoPanelAtNode(node);
 }
 
@@ -225,7 +243,9 @@ export function showInfoPanelWithDelay(node) {
 export function hideInfoPanelWithDelay() {
     clearTimeout(infoPanelHideTimeout);
     infoPanelHideTimeout = setTimeout(() => {
-        hideNodeInfo();
+        if (!pinnedNode) {
+            hideNodeInfo();
+        }
     }, HIDE_DELAY);
 }
 

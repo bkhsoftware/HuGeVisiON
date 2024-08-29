@@ -55,17 +55,8 @@ export function checkNodeHover() {
     }
 }
 
-export function togglePinNode(node) {
-    if (pinnedNode === node) {
-        // Unpin the node
-        pinnedNode = null;
-        hideInfoPanelWithDelay();
-    } else {
-        // Pin the new node
-        pinnedNode = node;
-        showNodeInfo(node);
-        positionInfoPanelAtNode(node);
-    }
+export function setPinnedNode(node) {
+    pinnedNode = node;
 }
 
 export { nodes };

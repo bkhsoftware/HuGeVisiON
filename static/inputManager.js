@@ -1,6 +1,7 @@
 import { camera, mouse, renderer, controls, scene } from './core.js';
 import { updateVisibleElements } from './utils.js';
-import { togglePinNode, pinnedNode } from './nodeManager.js';
+import { pinnedNode } from './nodeManager.js';
+import { togglePinNode } from './uiManager.js';
 import { loadNodesInView } from './dataLoader.js';
 import * as THREE from './lib/three.module.js';
 import { onCameraMove } from './cameraControls.js';
