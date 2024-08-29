@@ -10,9 +10,18 @@ let totalPages = 1;
 let loadedNodes = new Set();
 let loadedConnections = new Set();
 
+let nodeCache = {};
+let connectionCache = {};
+let lastFetchTime = 0;
+const FETCH_COOLDOWN = 5000; // 5 seconds cooldown between fetches
+
 let MAX_CONNECTIONS = 1000;
 let MAX_NODES = 1000;
 let RENDER_DISTANCE = 1000;
+
+let raycaster, mouse;
+let hoveredNode = null;
+let infoPanel;
 
 // Mode system
 let currentMode = null;
@@ -21,12 +30,27 @@ const modes = {};
 // Plugin system
 const plugins = {};
 
+window.registerMode = registerMode;
+
+function registerMode(name, modeImplementation) {
+    modes[name] = modeImplementation;
+    const modeSelect = document.getElementById('modeSelect');
+    if (modeSelect) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        modeSelect.appendChild(option);
+    }
+}
+
 function init() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
 
     camera.position.z = 300;
 
@@ -41,11 +65,15 @@ function init() {
         console.log('OrbitControls test complete');
     }
 
+    createInfoPanel();
+
     // Prevent right-click menu
     renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Add event listener for keyboard controls
     window.addEventListener('keydown', onKeyDown);
+
+    renderer.domElement.addEventListener('mousemove', onMouseMove, false);
 
     // Add ambient light to the scene
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -66,16 +94,17 @@ function init() {
 function initOrbitControls() {
     console.log('Initializing OrbitControls...');
     console.log('THREE.OrbitControls availability:', typeof THREE.OrbitControls);
-    
+
     if (typeof THREE.OrbitControls === 'function') {
         try {
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             controls.screenSpacePanning = false;
-            controls.minDistance = 100;
-            controls.maxDistance = 500;
-            controls.maxPolarAngle = Math.PI / 2;
+            controls.minDistance = 10;
+            controls.maxDistance = 1000;
+            controls.maxPolarAngle = Math.PI;
+            controls.keyPanSpeed = 0; // Disable default key controls
             console.log('OrbitControls initialized successfully:', controls);
         } catch (error) {
             console.error('Error initializing OrbitControls:', error);
@@ -148,17 +177,147 @@ function setMode(modeName) {
     updateVisualization();
 }
 
+function createInfoPanel() {
+    infoPanel = document.createElement('div');
+    infoPanel.style.position = 'absolute';
+    infoPanel.style.top = '10px';
+    infoPanel.style.right = '10px';
+    infoPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    infoPanel.style.color = 'white';
+    infoPanel.style.padding = '10px';
+    infoPanel.style.borderRadius = '5px';
+    infoPanel.style.display = 'none';
+    document.body.appendChild(infoPanel);
+}
+
+function onMouseMove(event) {
+    // Calculate mouse position in normalized device coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+}
+
+function checkNodeHover() {
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scene.children);
+
+    if (intersects.length > 0 && intersects[0].object.type === 'Mesh') {
+        const closestNode = intersects[0].object;
+        if (closestNode !== hoveredNode) {
+            hoveredNode = closestNode;
+            showNodeInfo(hoveredNode);
+        }
+    } else if (hoveredNode) {
+        hoveredNode = null;
+        hideNodeInfo();
+    }
+}
+
+function showNodeInfo(node) {
+    if (!node || !node.userData) {
+        console.error('Invalid node data');
+        return;
+    }
+
+    const nodeData = node.userData;
+    
+    let infoHTML = `
+        <h3>${nodeData.name || 'Unnamed Node'}</h3>
+        <p>Type: ${nodeData.type || 'Unspecified'}</p>
+    `;
+
+    // Only add position information if it exists
+    if (typeof nodeData.x === 'number' && 
+        typeof nodeData.y === 'number' && 
+        typeof nodeData.z === 'number') {
+        infoHTML += `
+            <p>X: ${nodeData.x.toFixed(2)}</p>
+            <p>Y: ${nodeData.y.toFixed(2)}</p>
+            <p>Z: ${nodeData.z.toFixed(2)}</p>
+        `;
+    }
+
+    infoHTML += `<button onclick="editNodeInfo(${nodeData.id})">Edit</button>`;
+
+    infoPanel.innerHTML = infoHTML;
+    infoPanel.style.display = 'block';
+}
+
+function hideNodeInfo() {
+    infoPanel.style.display = 'none';
+}
+
+function editNodeInfo(nodeId) {
+    const node = nodes[nodeId];
+    const nodeData = node.userData;
+    infoPanel.innerHTML = `
+        <h3>Edit Node</h3>
+        <input id="nodeName" value="${nodeData.name}">
+        <select id="nodeType">
+            <option value="Person" ${nodeData.type === 'Person' ? 'selected' : ''}>Person</option>
+            <option value="Organization" ${nodeData.type === 'Organization' ? 'selected' : ''}>Organization</option>
+            <option value="Place" ${nodeData.type === 'Place' ? 'selected' : ''}>Place</option>
+            <option value="Concept" ${nodeData.type === 'Concept' ? 'selected' : ''}>Concept</option>
+        </select>
+        <button onclick="saveNodeInfo(${nodeId})">Save</button>
+    `;
+}
+
+function saveNodeInfo(nodeId) {
+    const node = nodes[nodeId];
+    const newName = document.getElementById('nodeName').value;
+    const newType = document.getElementById('nodeType').value;
+
+    // Update node data
+    node.userData.name = newName;
+    node.userData.type = newType;
+
+    // Update node appearance
+    node.material.color.setHex(getColorForType(newType));
+
+    // Send update to server
+    fetch('/api/update_node', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            id: nodeId,
+            name: newName,
+            type: newType,
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Node updated successfully:', data);
+        showNodeInfo(node);
+    })
+    .catch((error) => {
+        console.error('Error updating node:', error);
+    });
+}
+
 function loadNodesInView() {
+    const now = Date.now();
+    if (now - lastFetchTime < FETCH_COOLDOWN) {
+        return; // Don't fetch if we've fetched recently
+    }
+    lastFetchTime = now;
+
     const position = camera.position;
     const url = `/api/nodes?page=${currentPage}&per_page=${perPage}&x=${position.x}&y=${position.y}&z=${position.z}&radius=${RENDER_DISTANCE}`;
-    
+
     fetch(url)
         .then(response => response.json())
         .then(data => {
             console.log(`Loaded ${data.nodes.length} nodes`);
             totalPages = data.total_pages;
-            data.nodes.forEach(addNode);
-            
+            data.nodes.forEach(node => {
+                if (!nodeCache[node.id]) {
+                    nodeCache[node.id] = node;
+                    addNode(node);
+                }
+            });
+
             if (currentPage < totalPages && Object.keys(nodes).length < MAX_NODES) {
                 currentPage++;
                 loadNodesInView();
@@ -178,17 +337,20 @@ function loadConnections() {
         return;
     }
     const url = `/api/connections?node_ids=${nodeIds.join(',')}&page=${currentPage}&per_page=${perPage}`;
-    
+
     fetch(url)
         .then(response => response.json())
         .then(data => {
             console.log(`Loaded ${data.connections.length} connections`);
             data.connections.forEach(connection => {
-                if (nodes[connection.from_node_id] && nodes[connection.to_node_id]) {
-                    addConnection(connection);
+                if (!connectionCache[connection.id]) {
+                    connectionCache[connection.id] = connection;
+                    if (nodes[connection.from_node_id] && nodes[connection.to_node_id]) {
+                        addConnection(connection);
+                    }
                 }
             });
-            
+
             if (currentPage < data.total_pages && loadedConnections.size < MAX_CONNECTIONS) {
                 currentPage++;
                 loadConnections();
@@ -253,11 +415,23 @@ function clearScene() {
     loadedConnections.clear();
 }
 
+function updateCamera() {
+    controls.update();
+    onCameraMove();
+}
+
+let cameraMovePending = false;
 function onCameraMove() {
-    updateVisibleElements();
-    // Consider loading more nodes if we're close to the edge of our loaded area
-    if (Object.keys(nodes).length < MAX_NODES) {
-        loadNodesInView();
+    if (!cameraMovePending) {
+        cameraMovePending = true;
+        setTimeout(() => {
+            updateVisibleElements();
+            // Only load new nodes if we're close to the edge of our loaded area
+            if (Object.keys(nodes).length < MAX_NODES) {
+                loadNodesInView();
+            }
+            cameraMovePending = false;
+        }, 200); // 200ms debounce
     }
 }
 
@@ -279,33 +453,45 @@ function onMouseClick(event) {
 }
 
 function onKeyDown(event) {
-    const moveDistance = 10;
+    const moveSpeed = 5;
+    const vector = new THREE.Vector3();
+
     switch(event.key) {
         case 'w':
         case 'ArrowUp':
-            camera.position.y += moveDistance;
+            vector.z = -moveSpeed;
             break;
         case 's':
         case 'ArrowDown':
-            camera.position.y -= moveDistance;
+            vector.z = moveSpeed;
             break;
         case 'a':
         case 'ArrowLeft':
-            camera.position.x -= moveDistance;
+            vector.x = -moveSpeed;
             break;
         case 'd':
         case 'ArrowRight':
-            camera.position.x += moveDistance;
+            vector.x = moveSpeed;
             break;
         case 'q':
-            camera.position.z -= moveDistance;
+            vector.y = moveSpeed;
             break;
         case 'e':
-            camera.position.z += moveDistance;
+            vector.y = -moveSpeed;
             break;
     }
-    loadNodesInView(); // Reload nodes after camera movement
+
+    // Apply the movement in the camera's local space
+    vector.applyQuaternion(camera.quaternion);
+    camera.position.add(vector);
+
+    controls.target.add(vector);
+    controls.update();
+
+    onCameraMove();
+    //loadNodesInView(); // Reload nodes after camera movement
 }
+
 
 function addNode(node) {
     if (Object.keys(nodes).length >= MAX_NODES) {
@@ -315,10 +501,13 @@ function addNode(node) {
     const material = new THREE.MeshPhongMaterial({color: getColorForType(node.type)});
     const sphere = new THREE.Mesh(geometry, material);
     sphere.position.set(node.x, node.y, node.z);
+    
+    // Set the entire node object as userData
+    sphere.userData = node;
+    
     scene.add(sphere);
     nodes[node.id] = sphere;
 }
-
 
 function addConnection(connection) {
     if (loadedConnections.size >= MAX_CONNECTIONS) {
@@ -403,9 +592,8 @@ function getColorForConnectionType(type) {
 
 function animate() {
     requestAnimationFrame(animate);
-    if (controls && typeof controls.update === 'function') {
-        controls.update();
-    }
+    updateCamera();
+    checkNodeHover();
     renderer.render(scene, camera);
 }
 
@@ -415,6 +603,20 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+function cleanupCache() {
+    const now = Date.now();
+    Object.keys(nodeCache).forEach(id => {
+        if (now - nodeCache[id].lastAccessed > 300000) { // 5 minutes
+            delete nodeCache[id];
+        }
+    });
+    Object.keys(connectionCache).forEach(id => {
+        if (now - connectionCache[id].lastAccessed > 300000) { // 5 minutes
+            delete connectionCache[id];
+        }
+    });
+}
+
 window.addEventListener('resize', onWindowResize);
 
 // Initialize the visualization when the DOM is fully loaded
@@ -422,6 +624,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded. Initializing visualization...');
     init();
 });
+
+// Call cleanupCache every 5 minutes
+setInterval(cleanupCache, 300000);
 
 // Add this line at the end of the file
 console.log('visualization.js loaded');

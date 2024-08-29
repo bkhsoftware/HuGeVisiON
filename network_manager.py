@@ -3,7 +3,6 @@ from database import Database
 class NetworkManager:
     def __init__(self):
         self.db = Database.get_instance()
-        self.db.connect()
 
     def add_node(self, name, type, x, y, z, url=None):
         query = """

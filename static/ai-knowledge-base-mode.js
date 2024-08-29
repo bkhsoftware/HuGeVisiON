@@ -107,5 +107,11 @@ const AIKnowledgeBaseMode = {
     }
 };
 
-// Register the mode
-registerMode('AIKnowledgeBase', AIKnowledgeBaseMode);
+// Wait for the DOM to be fully loaded before registering the mode
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof registerMode === 'function') {
+        registerMode('AIKnowledgeBase', AIKnowledgeBaseMode);
+    } else {
+        console.error('registerMode function is not available');
+    }
+});
