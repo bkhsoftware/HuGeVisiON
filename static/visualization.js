@@ -193,6 +193,14 @@ function createInfoPanel() {
     infoPanel.style.padding = '10px';
     infoPanel.style.borderRadius = '5px';
     infoPanel.style.display = 'none';
+    infoPanel.addEventListener('mouseenter', () => {
+        clearTimeout(infoPanelHideTimeout);
+    });
+    infoPanel.addEventListener('mouseleave', () => {
+        if (!pinnedNode) {
+            hideInfoPanelWithDelay();
+        }
+    });
     document.body.appendChild(infoPanel);
 }
 
@@ -316,7 +324,16 @@ function checkNodeHover() {
         }
     } else if (hoveredNode && !pinnedNode) {
         hoveredNode = null;
-        hideInfoPanelWithDelay();
+        const infoPanelRect = infoPanel.getBoundingClientRect();
+        const mouseOverInfoPanel = 
+            mouse.x * window.innerWidth >= infoPanelRect.left &&
+            mouse.x * window.innerWidth <= infoPanelRect.right &&
+            mouse.y * window.innerHeight >= infoPanelRect.top &&
+            mouse.y * window.innerHeight <= infoPanelRect.bottom;
+        
+        if (!mouseOverInfoPanel) {
+            hideInfoPanelWithDelay();
+        }
     }
 }
 
@@ -347,6 +364,7 @@ function showNodeInfo(node) {
 
     infoPanel.innerHTML = infoHTML;
     infoPanel.style.display = 'block';
+    positionInfoPanelAtNode(node);
 }
 
 function hideNodeInfo() {
