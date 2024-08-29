@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2024-08-29
 ### Added
 - Implemented an info and edit panel when hovering over the nodes
+- Added static/data_handler.js for import and export of JSON data
 
 ### Fixed
 - Removed unnecessary server interactions by implementing a cache
