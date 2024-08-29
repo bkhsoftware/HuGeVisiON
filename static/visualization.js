@@ -21,7 +21,14 @@ let RENDER_DISTANCE = 1000;
 
 let raycaster, mouse;
 let hoveredNode = null;
+
 let infoPanel;
+let infoPanelTimeout;
+let infoPanelHideTimeout;
+const SHOW_DELAY = 300; // 0.5 second delay before showing
+const HIDE_DELAY = 800; // 1 second delay before hiding
+
+let pinnedNode = null;
 
 // Mode system
 let currentMode = null;
@@ -74,6 +81,7 @@ function init() {
     window.addEventListener('keydown', onKeyDown);
 
     renderer.domElement.addEventListener('mousemove', onMouseMove, false);
+    renderer.domElement.addEventListener('click', onMouseClick, false);
 
     // Add ambient light to the scene
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -190,6 +198,51 @@ function createInfoPanel() {
     document.body.appendChild(infoPanel);
 }
 
+function togglePinNode(node) {
+    if (pinnedNode === node) {
+        // Unpin the node
+        pinnedNode = null;
+        hideInfoPanelWithDelay();
+    } else {
+        // Pin the new node
+        pinnedNode = node;
+        showNodeInfo(node);
+        positionInfoPanelAtNode(node);
+    }
+}
+
+function positionInfoPanelAtNode(node) {
+    const vector = new THREE.Vector3();
+    node.getWorldPosition(vector);
+    vector.project(camera);
+
+    const widthHalf = window.innerWidth / 2;
+    const heightHalf = window.innerHeight / 2;
+
+    const x = (vector.x * widthHalf) + widthHalf;
+    const y = - (vector.y * heightHalf) + heightHalf;
+
+    infoPanel.style.left = `${x}px`;
+    infoPanel.style.top = `${y}px`;
+    infoPanel.style.transform = 'translate(-50%, -100%)'; // Position above the node
+}
+
+function showInfoPanelWithDelay(node) {
+    clearTimeout(infoPanelTimeout);
+    clearTimeout(infoPanelHideTimeout);
+    infoPanelTimeout = setTimeout(() => {
+        showNodeInfo(node);
+        positionInfoPanelAtNode(node);
+    }, SHOW_DELAY);
+}
+
+function hideInfoPanelWithDelay() {
+    clearTimeout(infoPanelHideTimeout);
+    infoPanelHideTimeout = setTimeout(() => {
+        hideNodeInfo();
+    }, HIDE_DELAY);
+}
+
 function onMouseMove(event) {
     // Calculate mouse position in normalized device coordinates
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -204,11 +257,13 @@ function checkNodeHover() {
         const closestNode = intersects[0].object;
         if (closestNode !== hoveredNode) {
             hoveredNode = closestNode;
-            showNodeInfo(hoveredNode);
+            if (!pinnedNode) {
+                showInfoPanelWithDelay(hoveredNode);
+            }
         }
-    } else if (hoveredNode) {
+    } else if (hoveredNode && !pinnedNode) {
         hoveredNode = null;
-        hideNodeInfo();
+        hideInfoPanelWithDelay();
     }
 }
 
@@ -436,7 +491,6 @@ function onCameraMove() {
 }
 
 function onMouseClick(event) {
-    // Raycast to find clicked objects
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -446,8 +500,16 @@ function onMouseClick(event) {
     const intersects = raycaster.intersectObjects(scene.children);
     if (intersects.length > 0) {
         const object = intersects[0].object;
+        if (object.type === 'Mesh') {
+            togglePinNode(object);
+        }
         if (currentMode && currentMode.handleClick) {
             currentMode.handleClick(object);
+        }
+    } else {
+        // Clicked empty space, unpin if there's a pinned node
+        if (pinnedNode) {
+            togglePinNode(pinnedNode);
         }
     }
 }
