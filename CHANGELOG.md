@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented an info and edit panel when hovering over the nodes
 - Added static/data_handler.js for import and export of JSON data
 
+## Changed
+- Refactored visualization.js
+- Using locally stored THREE module and OrbitControls.
+
 ### Fixed
 - Removed unnecessary server interactions by implementing a cache
+- Favicon now loads
 
 ## [0.2.0] - 2024-08-22
 ### Added
