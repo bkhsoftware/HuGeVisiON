@@ -33,7 +33,7 @@ Present dynamically updated, large and accurate trees of relations which can be 
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/HuGe-VisiON.git
+   git clone https://github.com/BjornKennethHolmstrom/HuGeVisiON.git
    cd HuGe-VisiON
    ```
 
