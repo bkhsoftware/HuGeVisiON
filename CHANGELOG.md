@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2024-09-01
+### Added
+- Implemented default dataset creation and loading mechanism
+- Added data persistence functionality across page refreshes
+- Implemented JSON data import and export features
+- Created dataSync.js for handling data synchronization between client and server
+
+### Changed
+- Enhanced node label visibility and scaling based on camera distance
+- Improved error handling in data loading processes
+- Updated README with recent improvements and new file descriptions
+
+### Fixed
+- Resolved issues with data loading on page refresh
+- Fixed label cutoff problems for nodes with long names
 ## [0.3.0] - 2024-08-29
 ### Added
 - Implemented an info and edit panel when hovering over the nodes

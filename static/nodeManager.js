@@ -40,6 +40,13 @@ export function addNode(node, addToScene = true) {
     return sphere;
 }
 
+export function clearNodes() {
+    Object.values(nodes).forEach(node => {
+        scene.remove(node);
+    });
+    nodes = {};
+}
+
 export function addNodeToScene(nodeId) {
     if (nodes[nodeId] && !scene.getObjectById(nodes[nodeId].id)) {
         scene.add(nodes[nodeId]);

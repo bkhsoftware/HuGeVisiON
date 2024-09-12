@@ -1,6 +1,6 @@
 # HuGe VisiON (Huge General Visualizer in Open Networks)
 
-Version: 0.2.0
+Version: 0.3.1
 
 HuGe VisiON is a powerful 3D visualization tool designed to present dynamically updated, large and accurate trees of relations which can be browsed online. This project aims to provide a new and exciting way to discover ideas, people, and foster a sense of interconnectedness across various domains.
 
@@ -19,6 +19,10 @@ Present dynamically updated, large and accurate trees of relations which can be 
 - User-adjustable settings for maximum connections, maximum nodes, and render distance
 - Modular architecture supporting different visualization modes
 - AI Knowledge Base mode as an example of a specialized visualization mode
+- Default dataset creation and loading
+- Improved data persistence across page refreshes
+- Enhanced label visibility for nodes
+- JSON data import and export functionality
 
 ## Prerequisites
 
@@ -144,8 +148,9 @@ Key files and their purposes:
 - `static/config.js`: Configuration settings for the frontend
 - `static/connectionManager.js`: Manages connections between nodes
 - `static/core.js`: Core functionality for the 3D visualization, including scene setup, lighting, and animation loop
-- `static/data_handler.js`: Handles data import and export operations for JSON data
+- `static/data_handler.js`: Manages JSON data import and export operations
 - `static/dataLoader.js`: Loads data for the visualization
+- `static/dataSync.js`: Handles synchronization of data between client and server
 - `static/favicon.ico`: Favicon for the web application
 - `static/inputManager.js`: Manages user input for the visualization
 - `static/lib/OrbitControls.js`: Three.js OrbitControls for camera manipulation
@@ -173,6 +178,14 @@ To create a new visualization mode:
 2. Implement the required mode functions (activate, deactivate, interpretData, etc.).
 3. Register the new mode in `visualization.js` using the `registerMode` function.
 
+## Recent Improvements
+
+- Implemented a default dataset creation and loading mechanism
+- Enhanced node label visibility and scaling based on camera distance
+- Added data persistence functionality to maintain visualization state across page refreshes
+- Improved error handling and data loading processes
+- Implemented JSON data import and export features
+
 ## Future Plans
 
 - Implement user authentication and personal networks
@@ -197,3 +210,4 @@ Please see the [LICENSE.md](LICENSE.md) file in the project repository.
 - Flask for the web framework
 - PostgreSQL for the database
 - Claude A.I. for development assistance
+- My family for support and infrastructure

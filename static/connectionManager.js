@@ -51,3 +51,11 @@ export function addConnectionToScene(connectionId) {
         scene.add(lines[connectionId]);
     }
 }
+
+export function clearConnections() {
+    Object.values(lines).forEach(line => {
+        scene.remove(line);
+    });
+    lines = {};
+    loadedConnections.clear();
+}

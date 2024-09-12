@@ -6,18 +6,61 @@ from database import Database
 from math import ceil
 from config import Config
 import psycopg2
+import json
+import tempfile
+from flask import send_file
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = Config.SECRET_KEY
 db = Database.get_instance()
 
+def ensure_default_dataset():
+    dataset = db.execute_query("SELECT id FROM Datasets ORDER BY id DESC LIMIT 1")
+    if not dataset:
+        # Create a default dataset
+        dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES ('Default Dataset') RETURNING id")[0]['id']
+        
+        # Add some default nodes and connections
+        default_nodes = [
+            (1, 'Node 1', 'Default', 0, 0, 0, dataset_id),
+            (2, 'Node 2', 'Default', 50, 50, 50, dataset_id),
+            (3, 'Node 3', 'Default', -50, -50, -50, dataset_id)
+        ]
+        db.execute_many("INSERT INTO Nodes (id, name, type, x, y, z, dataset_id) VALUES (%s, %s, %s, %s, %s, %s, %s)", default_nodes)
+        
+        default_connections = [
+            (1, 1, 2, 'Default', dataset_id),
+            (2, 2, 3, 'Default', dataset_id),
+            (3, 3, 1, 'Default', dataset_id)
+        ]
+        db.execute_many("INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s, %s)", default_connections)
+        return dataset_id
+    return dataset[0]['id']
+
+@app.before_request
+def before_request():
+    ensure_default_dataset()
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/api/most_recent_dataset')
+def get_most_recent_dataset():
+    try:
+        dataset_id = ensure_default_dataset()
+        dataset = db.execute_query("SELECT id, name FROM Datasets WHERE id = %s", (dataset_id,))[0]
+        nodes = db.execute_query("SELECT * FROM Nodes WHERE dataset_id = %s", (dataset_id,))
+        connections = db.execute_query("SELECT * FROM Connections WHERE dataset_id = %s", (dataset_id,))
+        return jsonify({'dataset': dataset, 'nodes': nodes, 'connections': connections})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/nodes')
 def get_nodes():
     try:
+        dataset_id = ensure_default_dataset()
+
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 100))
         x = float(request.args.get('x', 0))
@@ -29,16 +72,16 @@ def get_nodes():
 
         query = """
         SELECT * FROM Nodes
-        WHERE POWER(x - %s, 2) + POWER(y - %s, 2) + POWER(z - %s, 2) <= POWER(%s, 2)
+        WHERE dataset_id = %s AND POWER(x - %s, 2) + POWER(y - %s, 2) + POWER(z - %s, 2) <= POWER(%s, 2)
         LIMIT %s OFFSET %s
         """
-        nodes = db.execute_query(query, (x, y, z, radius, per_page, offset))
+        nodes = db.execute_query(query, (dataset_id, x, y, z, radius, per_page, offset))
 
         count_query = """
         SELECT COUNT(*) FROM Nodes
-        WHERE POWER(x - %s, 2) + POWER(y - %s, 2) + POWER(z - %s, 2) <= POWER(%s, 2)
+        WHERE dataset_id = %s AND POWER(x - %s, 2) + POWER(y - %s, 2) + POWER(z - %s, 2) <= POWER(%s, 2)
         """
-        count_result = db.execute_query(count_query, (x, y, z, radius))
+        count_result = db.execute_query(count_query, (dataset_id, x, y, z, radius))
 
         total_count = count_result[0]['count']
         total_pages = ceil(total_count / per_page)
@@ -79,6 +122,8 @@ def update_node():
 @app.route('/api/connections')
 def get_connections():
     try:
+        dataset_id = ensure_default_dataset()
+
         node_ids = request.args.get('node_ids', '').split(',')
         node_ids = [int(id) for id in node_ids if id and id.lower() != 'undefined']
 
@@ -98,16 +143,16 @@ def get_connections():
 
         query = """
         SELECT * FROM Connections
-        WHERE from_node_id = ANY(%s) OR to_node_id = ANY(%s)
+        WHERE dataset_id = %s AND (from_node_id = ANY(%s) OR to_node_id = ANY(%s))
         LIMIT %s OFFSET %s
         """
-        connections = db.execute_query(query, (node_ids, node_ids, per_page, offset))
+        connections = db.execute_query(query, (dataset_id, node_ids, node_ids, per_page, offset))
 
         count_query = """
         SELECT COUNT(*) FROM Connections
-        WHERE from_node_id = ANY(%s) OR to_node_id = ANY(%s)
+        WHERE dataset_id = %s AND (from_node_id = ANY(%s) OR to_node_id = ANY(%s))
         """
-        count_result = db.execute_query(count_query, (node_ids, node_ids))
+        count_result = db.execute_query(count_query, (dataset_id, node_ids, node_ids))
 
         total_count = count_result[0]['count']
         total_pages = ceil(total_count / per_page)
@@ -119,8 +164,6 @@ def get_connections():
             'total_pages': total_pages,
             'total_count': total_count
         })
-    except psycopg2.Error as e:
-        return jsonify({'error': f"Database error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -144,27 +187,27 @@ def load_data():
     try:
         data = request.json
         
-        # Clear existing data
-        db.execute_query("DELETE FROM Connections")
-        db.execute_query("DELETE FROM Nodes")
+        # Create a new dataset
+        dataset_name = "Loaded Dataset " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (dataset_name,))[0]['id']
 
         # Insert new nodes
         for node in data['nodes']:
             query = """
-            INSERT INTO Nodes (id, name, type, x, y, z) 
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO Nodes (id, name, type, x, y, z, dataset_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
-            db.execute_query(query, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z']))
+            db.execute_query(query, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z'], dataset_id))
 
         # Insert new connections
         for conn in data['connections']:
             query = """
-            INSERT INTO Connections (id, from_node_id, to_node_id, type) 
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id) 
+            VALUES (%s, %s, %s, %s, %s)
             """
-            db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type']))
+            db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type'], dataset_id))
 
-        return jsonify({'message': 'Data loaded successfully'}), 200
+        return jsonify({'message': 'Data loaded successfully', 'dataset_id': dataset_id}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

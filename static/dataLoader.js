@@ -1,5 +1,5 @@
-import { addNode, nodes } from './nodeManager.js';
-import { addConnection, loadedConnections } from './connectionManager.js';
+import { addNode, nodes, clearNodes } from './nodeManager.js';
+import { addConnection, loadedConnections, clearConnections } from './connectionManager.js';
 import { MAX_NODES, MAX_CONNECTIONS, RENDER_DISTANCE } from './config.js'
 import { camera } from './core.js';
 import { updateVisibleElements } from './utils.js';
@@ -15,7 +15,49 @@ const FETCH_COOLDOWN = 5000;
 
 
 export function initDataLoader() {
-    // ... (existing data loading initialization)
+    loadMostRecentDataset();
+}
+
+function loadMostRecentDataset() {
+    fetch('/api/most_recent_dataset')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('No dataset found');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.nodes && data.nodes.length > 0 && data.connections) {
+                console.log(`Loading most recent dataset with ${data.nodes.length} nodes and ${data.connections.length} connections`);
+                
+                // Clear existing data
+                clearNodes();
+                clearConnections();
+                nodeCache = {};
+                connectionCache = {};
+
+                // Load new data
+                data.nodes.forEach(node => {
+                    nodeCache[node.id] = node;
+                    addNode(node);
+                });
+
+                data.connections.forEach(connection => {
+                    connectionCache[connection.id] = connection;
+                    if (nodes[connection.from_node_id] && nodes[connection.to_node_id]) {
+                        addConnection(connection);
+                    }
+                });
+
+                updateVisibleElements();
+            } else {
+                console.log("Dataset is empty. Starting with an empty visualization.");
+            }
+        })
+        .catch(error => {
+            console.error('Error loading most recent dataset:', error);
+            loadNodesInView(); // Attempt to load nodes if no dataset is found
+        });
 }
 
 export function loadNodesInView() {
@@ -29,27 +71,39 @@ export function loadNodesInView() {
     const url = `/api/nodes?page=${currentPage}&per_page=${perPage}&x=${position.x}&y=${position.y}&z=${position.z}&radius=${RENDER_DISTANCE}`;
 
     fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            console.log(`Loaded ${data.nodes.length} nodes`);
-            totalPages = data.total_pages;
-            data.nodes.forEach(node => {
-                if (!nodeCache[node.id]) {
-                    nodeCache[node.id] = node;
-                    addNode(node);
-                }
-            });
-
-            if (currentPage < totalPages && Object.keys(nodes).length < MAX_NODES) {
-                currentPage++;
-                loadNodesInView();
-            } else {
-                currentPage = 1;
-                loadConnections();
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('No nodes found');
             }
-            updateVisibleElements();
+            return response.json();
         })
-        .catch(error => console.error('Error loading nodes:', error));
+        .then(data => {
+            if (data.nodes && data.nodes.length > 0) {
+                console.log(`Loaded ${data.nodes.length} nodes`);
+                totalPages = data.total_pages;
+                data.nodes.forEach(node => {
+                    if (!nodeCache[node.id]) {
+                        nodeCache[node.id] = node;
+                        addNode(node);
+                    }
+                });
+
+                if (currentPage < totalPages && Object.keys(nodes).length < MAX_NODES) {
+                    currentPage++;
+                    loadNodesInView();
+                } else {
+                    currentPage = 1;
+                    loadConnections();
+                }
+                updateVisibleElements();
+            } else {
+                console.log("No nodes found in the current view.");
+            }
+        })
+        .catch(error => {
+            console.error('Error loading nodes:', error);
+            // You might want to add some user feedback here
+        });
 }
 
 export function loadConnections() {
