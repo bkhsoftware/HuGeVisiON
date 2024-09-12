@@ -87,13 +87,75 @@ Present dynamically updated, large and accurate trees of relations which can be 
 
 ## Project Structure
 
+HuGeVisiON
+├── app.py
+├── CHANGELOG.md
+├── config.py
+├── database
+│   └── network_schema.sql
+├── database.py
+├── docs
+│   └── modular-visualization-architecture.md
+├── generate_secret_key.py
+├── generate_test_data.py
+├── LICENSE.md
+├── network_manager.py
+├── README.md
+├── reset_database.py
+├── setup_database.py
+├── static
+│   ├── ai-knowledge-base-mode.js
+│   ├── cameraControls.js
+│   ├── config.js
+│   ├── connectionManager.js
+│   ├── core.js
+│   ├── data_handler.js
+│   ├── dataLoader.js
+│   ├── favicon.ico
+│   ├── inputManager.js
+│   ├── lib
+│   │   ├── OrbitControls.js
+│   │   └── three.module.js
+│   ├── modeManager.js
+│   ├── nodeManager.js
+│   ├── uiManager.js
+│   ├── utils.js
+│   └── visualization.js
+└── templates
+    └── index.html
+
+Key files and their purposes:
+
 - `app.py`: Flask application server
+- `CHANGELOG.md`: Document tracking all notable changes to the project
+- `config.py`: Configuration settings for the application
+- `database/network_schema.sql`: SQL schema for the network database
 - `database.py`: Database connection and query management
-- `reset_database.py`: Script to reset and initialize the database
+- `docs/modular-visualization-architecture.md`: Documentation of the modular visualization architecture
+- `generate_secret_key.py`: Script to generate a secret key for the application
 - `generate_test_data.py`: Script to generate sample data
-- `static/visualization.js`: 3D visualization logic using Three.js
+- `LICENSE.md`: License information for the project
+- `network_manager.py`: Manages network operations, including adding nodes and connections, and querying the database
+- `README.md`: This file, containing project documentation
+- `reset_database.py`: Script to reset and initialize the database
+- `setup_database.py`: Script to set up the initial database schema using the SQL file in the database folder
 - `static/ai-knowledge-base-mode.js`: Example specialized visualization mode
-- `templates/index.html`: Main HTML template
+- `static/cameraControls.js`: Manages camera controls in the 3D environment
+- `static/config.js`: Configuration settings for the frontend
+- `static/connectionManager.js`: Manages connections between nodes
+- `static/core.js`: Core functionality for the 3D visualization, including scene setup, lighting, and animation loop
+- `static/data_handler.js`: Handles data import and export operations for JSON data
+- `static/dataLoader.js`: Loads data for the visualization
+- `static/favicon.ico`: Favicon for the web application
+- `static/inputManager.js`: Manages user input for the visualization
+- `static/lib/OrbitControls.js`: Three.js OrbitControls for camera manipulation
+- `static/lib/three.module.js`: Three.js library for 3D rendering
+- `static/modeManager.js`: Manages different visualization modes
+- `static/nodeManager.js`: Manages node operations in the visualization
+- `static/uiManager.js`: Manages the user interface elements
+- `static/utils.js`: Utility functions for the frontend
+- `static/visualization.js`: Main 3D visualization logic using Three.js (refactored)
+- `templates/index.html`: Main HTML template for the web application
 - `.env`: Environment variables for database configuration (not tracked in git)
 
 ## Extending the Network

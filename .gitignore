@@ -30,3 +30,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Keep test data private
+testdata/

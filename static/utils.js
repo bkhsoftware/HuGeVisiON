@@ -1,8 +1,10 @@
-import { camera } from './core.js';
+import { camera, scene } from './core.js';
 import { nodes } from './nodeManager.js';
 import { lines } from './connectionManager.js';
 
 let RENDER_DISTANCE = 1000;
+let MAX_VISIBLE_NODES = 1000;
+let MAX_VISIBLE_CONNECTIONS = 1000;
 
 export function getColorForType(type) {
     const colors = {
@@ -27,22 +29,56 @@ export function getColorForConnectionType(type) {
 export function updateVisibleElements() {
     const position = camera.position;
     
+    // Sort nodes by distance to camera
+    const sortedNodes = Object.values(nodes).sort((a, b) => 
+        a.position.distanceTo(position) - b.position.distanceTo(position)
+    );
+    
     // Update node visibility
-    Object.values(nodes).forEach(node => {
-        if (node && node.position) {
-            const distance = node.position.distanceTo(position);
-            node.visible = distance <= RENDER_DISTANCE;
+    let visibleNodeCount = 0;
+    sortedNodes.forEach(node => {
+        const distance = node.position.distanceTo(position);
+        const shouldBeVisible = distance <= RENDER_DISTANCE && visibleNodeCount < MAX_VISIBLE_NODES;
+        
+        if (shouldBeVisible && !scene.getObjectById(node.id)) {
+            scene.add(node);
+            visibleNodeCount++;
+        } else if (!shouldBeVisible && scene.getObjectById(node.id)) {
+            scene.remove(node);
         }
+        
+        node.visible = shouldBeVisible;
     });
     
     // Update connection visibility
+    let visibleConnectionCount = 0;
     Object.values(lines).forEach(line => {
         if (line && line.userData) {
             const startNode = nodes[line.userData.from_node_id];
             const endNode = nodes[line.userData.to_node_id];
-            line.visible = startNode && endNode && startNode.visible && endNode.visible;
+            const shouldBeVisible = startNode && endNode && startNode.visible && endNode.visible && visibleConnectionCount < MAX_VISIBLE_CONNECTIONS;
+            
+            if (shouldBeVisible && !scene.getObjectById(line.id)) {
+                scene.add(line);
+                visibleConnectionCount++;
+            } else if (!shouldBeVisible && scene.getObjectById(line.id)) {
+                scene.remove(line);
+            }
+            
+            line.visible = shouldBeVisible;
         }
     });
 }
 
-// ... (other utility functions)
+export function setRenderDistance(distance) {
+    RENDER_DISTANCE = distance;
+}
+
+export function setMaxVisibleNodes(max) {
+    MAX_VISIBLE_NODES = max;
+}
+
+export function setMaxVisibleConnections(max) {
+    MAX_VISIBLE_CONNECTIONS = max;
+}
+

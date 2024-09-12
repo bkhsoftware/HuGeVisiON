@@ -124,5 +124,115 @@ def get_connections():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/save_data', methods=['POST'])
+def save_data():
+    try:
+        data = request.json
+        
+        # Save data to a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp_file:
+            json.dump(data, temp_file, indent=2)
+            temp_filename = temp_file.name
+
+        # Send the file to the client
+        return send_file(temp_filename, as_attachment=True, attachment_filename='huge_vision_data.json')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/load_data', methods=['POST'])
+def load_data():
+    try:
+        data = request.json
+        
+        # Clear existing data
+        db.execute_query("DELETE FROM Connections")
+        db.execute_query("DELETE FROM Nodes")
+
+        # Insert new nodes
+        for node in data['nodes']:
+            query = """
+            INSERT INTO Nodes (id, name, type, x, y, z) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            db.execute_query(query, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z']))
+
+        # Insert new connections
+        for conn in data['connections']:
+            query = """
+            INSERT INTO Connections (id, from_node_id, to_node_id, type) 
+            VALUES (%s, %s, %s, %s)
+            """
+            db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type']))
+
+        return jsonify({'message': 'Data loaded successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/sync_data', methods=['POST'])
+def sync_data():
+    try:
+        data = request.json
+        
+        # Sync nodes
+        for node in data['nodes']:
+            query = """
+            INSERT INTO Nodes (id, name, type, x, y, z)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE
+            SET name = EXCLUDED.name, type = EXCLUDED.type, x = EXCLUDED.x, y = EXCLUDED.y, z = EXCLUDED.z
+            """
+            db.execute_query(query, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z']))
+
+        # Sync connections
+        for conn in data['connections']:
+            query = """
+            INSERT INTO Connections (id, from_node_id, to_node_id, type)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE
+            SET from_node_id = EXCLUDED.from_node_id, to_node_id = EXCLUDED.to_node_id, type = EXCLUDED.type
+            """
+            db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type']))
+
+        return jsonify({'message': 'Data synchronized successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/datasets', methods=['GET'])
+def get_datasets():
+    datasets = db.execute_query("SELECT id, name FROM Datasets")
+    return jsonify(datasets)
+
+@app.route('/api/dataset/<int:dataset_id>', methods=['GET'])
+def get_dataset(dataset_id):
+    nodes = db.execute_query("SELECT * FROM Nodes WHERE dataset_id = %s", (dataset_id,))
+    connections = db.execute_query("SELECT * FROM Connections WHERE dataset_id = %s", (dataset_id,))
+    return jsonify({'nodes': nodes, 'connections': connections})
+
+@app.route('/api/dataset', methods=['POST'])
+def create_dataset():
+    data = request.json
+    dataset_name = data['name']
+    nodes = data['nodes']
+    connections = data['connections']
+    
+    # Create new dataset
+    dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (dataset_name,))[0]['id']
+    
+    # Insert nodes
+    for node in nodes:
+        db.execute_query("""
+            INSERT INTO Nodes (id, name, type, x, y, z, dataset_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z'], dataset_id))
+    
+    # Insert connections
+    for conn in connections:
+        db.execute_query("""
+            INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id) 
+            VALUES (%s, %s, %s, %s, %s)
+        """, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type'], dataset_id))
+    
+    return jsonify({'message': 'Dataset created successfully', 'dataset_id': dataset_id})
+
 if __name__ == '__main__':
     app.run(debug=True)

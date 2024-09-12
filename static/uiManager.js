@@ -1,6 +1,8 @@
-import { camera } from './core.js';
-import { nodes, pinnedNode, setPinnedNode } from './nodeManager.js';
+import { scene, camera } from './core.js';
+import { nodes, addNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
+import { lines, loadedConnections, addConnection } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
+import { focusOnAllNodes } from './cameraControls.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
 import * as THREE from './lib/three.module.js';
 
@@ -9,10 +11,14 @@ let infoPanelTimeout;
 let infoPanelHideTimeout;
 const SHOW_DELAY = 300;
 const HIDE_DELAY = 800;
+let hoveredNode = null;
 
 export function initUIManager() {
     createInfoPanel();
     initControls();
+    initSaveLoadButtons();
+    initLabelToggle();
+    initDatasetSelector();
 }
 
 function initControls() {
@@ -48,6 +54,35 @@ function initControls() {
     document.getElementById('maxConnectionsValue').textContent = MAX_CONNECTIONS;
     document.getElementById('maxNodesValue').textContent = MAX_NODES;
     document.getElementById('renderDistanceValue').textContent = RENDER_DISTANCE;
+}
+
+function initSaveLoadButtons() {
+    const saveDataButton = document.getElementById('saveDataButton');
+    const loadDataButton = document.getElementById('loadDataButton');
+    const loadDataFile = document.getElementById('loadDataFile');
+
+    saveDataButton.addEventListener('click', saveDataToFile);
+    loadDataButton.addEventListener('click', () => loadDataFile.click());
+    loadDataFile.addEventListener('change', loadDataFromFile);
+}
+
+function initLabelToggle() {
+    const showLabelsCheckbox = document.getElementById('showLabels');
+    showLabelsCheckbox.addEventListener('change', (e) => {
+        setShowLabels(e.target.checked);
+    });
+}
+
+function initDatasetSelector() {
+    const datasetSelect = document.createElement('select');
+    datasetSelect.id = 'datasetSelector';
+    document.getElementById('controls').appendChild(datasetSelect);
+
+    fetchDatasets();
+
+    datasetSelect.addEventListener('change', (e) => {
+        loadDataset(e.target.value);
+    });
 }
 
 function createInfoPanel() {
@@ -264,3 +299,123 @@ function positionPanelWithinWindow(panel) {
         panel.style.top = '0px';
     }
 }
+
+function fetchDatasets() {
+    fetch('/api/datasets')
+        .then(response => response.json())
+        .then(datasets => {
+            const datasetSelect = document.getElementById('datasetSelector');
+            datasetSelect.innerHTML = '<option value="">Select a dataset</option>';
+            datasets.forEach(dataset => {
+                const option = document.createElement('option');
+                option.value = dataset.id;
+                option.textContent = dataset.name;
+                datasetSelect.appendChild(option);
+            });
+        });
+}
+
+function loadDataset(datasetId) {
+    if (!datasetId) return;
+
+    fetch(`/api/dataset/${datasetId}`)
+        .then(response => response.json())
+        .then(data => {
+            clearExistingData();
+            loadNodesFromData(data.nodes);
+            loadConnectionsFromData(data.connections);
+            updateVisibleElements();
+            focusOnAllNodes();
+        });
+}
+
+function saveData() {
+    const data = {
+        name: prompt("Enter a name for this dataset:"),
+        nodes: Object.values(nodes).map(node => node.userData),
+        connections: Object.values(lines).map(line => line.userData)
+    };
+
+    fetch('/api/dataset', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        console.log('Dataset saved:', result);
+        fetchDatasets();  // Refresh the dataset list
+    })
+    .catch(error => {
+        console.error('Error saving dataset:', error);
+    });
+}
+
+function saveDataToFile() {
+    // Collect all node and connection data, not just visible ones
+    const data = {
+        nodes: Object.values(nodes).map(node => node.userData),
+        connections: Object.values(lines).map(line => line.userData)
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'huge_vision_data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function loadDataFromFile(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = JSON.parse(e.target.result);
+            clearExistingData();
+            loadNodesFromData(data.nodes);
+            loadConnectionsFromData(data.connections);
+            updateVisibleElements();
+            focusOnAllNodes(); // Add this line
+        };
+        reader.readAsText(file);
+    }
+}
+
+function clearExistingData() {
+    // Clear nodes
+    Object.values(nodes).forEach(node => {
+        scene.remove(node);
+    });
+    Object.keys(nodes).forEach(key => delete nodes[key]);
+
+    // Clear connections
+    Object.values(lines).forEach(line => {
+        scene.remove(line);
+    });
+    Object.keys(lines).forEach(key => delete lines[key]);
+    loadedConnections.clear();
+
+    // Reset any pinned or hovered nodes
+    setPinnedNode(null);
+    hoveredNode = null;
+
+    // Clear info panel
+    hideNodeInfo();
+}
+
+function loadNodesFromData(nodesData) {
+    nodesData.forEach(nodeData => {
+        addNode(nodeData, false); // Add node without adding to scene
+    });
+}
+
+function loadConnectionsFromData(connectionsData) {
+    connectionsData.forEach(connectionData => {
+        addConnection(connectionData, false); // Add connection without adding to scene
+    });
+}
+

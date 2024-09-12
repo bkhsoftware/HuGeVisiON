@@ -35,6 +35,10 @@
     <div id="controls">
         <label for="modeSelect">Select a mode:</label>
         <select id="modeSelect"></select>
+        <label for="showLabels">
+            <input type="checkbox" id="showLabels" checked>
+            Show Node Labels
+        </label>
         <br><br>
         <label for="maxConnections">Max Connections:</label>
         <input type="range" id="maxConnections" min="100" max="5000" value="1000">
@@ -47,6 +51,10 @@
         <label for="renderDistance">Render Distance:</label>
         <input type="range" id="renderDistance" min="100" max="2000" value="1000">
         <span id="renderDistanceValue">1000</span>
+        <br>
+        <button id="saveDataButton">Save Data</button>
+        <button id="loadDataButton">Load Data</button>
+        <input type="file" id="loadDataFile" style="display: none;" accept=".json">
     </div>
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
     <script type="importmap">

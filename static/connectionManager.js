@@ -3,24 +3,21 @@ import { nodes } from './nodeManager.js';
 import { getColorForConnectionType } from './utils.js';
 import { MAX_CONNECTIONS } from './config.js';
 import * as THREE from './lib/three.module.js';
+import { triggerSync } from './dataSync.js';
 
-let lines = {};
+export let lines = {};
 export let loadedConnections = new Set();
 
 export function initConnectionManager() {
     // ... (existing connection-related initialization)
 }
 
-export function addConnection(connection) {
-    if (loadedConnections.size >= MAX_CONNECTIONS) {
-        return;
-    }
-
+export function addConnection(connection, addToScene = true) {
     const startNode = nodes[connection.from_node_id];
     const endNode = nodes[connection.to_node_id];
 
     if (!startNode || !endNode) {
-        return;  // Silently skip connections with missing nodes
+        return null;
     }
 
     const start = startNode.position;
@@ -33,16 +30,24 @@ export function addConnection(connection) {
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
         color: getColorForConnectionType(connection.type),
+        linewidth: 3, // Increased from default 1
         opacity: 0.8,
         transparent: true
     });
     const line = new THREE.Line(geometry, material);
     line.userData = connection;
-    scene.add(line);
+    
+    if (addToScene) {
+        scene.add(line);
+    }
     lines[connection.id] = line;
     loadedConnections.add(connection.id);
+    triggerSync();
+    return line;
 }
 
-// ... (other connection-related functions)
-
-export { lines };
+export function addConnectionToScene(connectionId) {
+    if (lines[connectionId] && !scene.getObjectById(lines[connectionId].id)) {
+        scene.add(lines[connectionId]);
+    }
+}

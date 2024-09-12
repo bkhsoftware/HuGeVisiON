@@ -2,7 +2,7 @@ import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
 
 import { updateCamera } from './cameraControls.js';
-import { checkNodeHover } from './nodeManager.js';
+import { checkNodeHover, updateLabels } from './nodeManager.js';
 import { loadNodesInView } from './dataLoader.js';
 
 export let controls;
@@ -69,6 +69,7 @@ export function animate() {
     requestAnimationFrame(animate);
     updateCamera();
     checkNodeHover();
+    updateLabels();
     renderer.render(scene, camera);
 }
 
