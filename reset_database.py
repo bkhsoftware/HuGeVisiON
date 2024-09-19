@@ -86,6 +86,42 @@ def reset_database():
 
     print("Created Datasets, Nodes, and Connections tables with updated schema.")
 
+    # Create a default dataset
+    cur.execute("INSERT INTO Datasets (name) VALUES ('Default Dataset') RETURNING id")
+    default_dataset_id = cur.fetchone()[0]
+    print(f"Created default dataset with ID: {default_dataset_id}")
+
+    # Create some default nodes
+    default_nodes = [
+        ('Node 1', 'Default', 0, 0, 0),
+        ('Node 2', 'Default', 50, 50, 50),
+        ('Node 3', 'Default', -50, -50, -50)
+    ]
+    for name, node_type, x, y, z in default_nodes:
+        cur.execute("""
+            INSERT INTO Nodes (name, type, x, y, z, dataset_id) 
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+        """, (name, node_type, x, y, z, default_dataset_id))
+        print(f"Created node: {name}")
+
+    # Create some default connections
+    cur.execute("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (default_dataset_id,))
+    node_ids = [row[0] for row in cur.fetchall()]
+
+    default_connections = [
+        (node_ids[0], node_ids[1], 'Default'),
+        (node_ids[1], node_ids[2], 'Default'),
+        (node_ids[2], node_ids[0], 'Default')
+    ]
+    for from_node_id, to_node_id, conn_type in default_connections:
+        cur.execute("""
+            INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) 
+            VALUES (%s, %s, %s, %s)
+        """, (from_node_id, to_node_id, conn_type, default_dataset_id))
+        print(f"Created connection: {from_node_id} -> {to_node_id}")
+
+    print("Default dataset with nodes and connections created successfully.")
+
     # Close the connection
     cur.close()
     conn.close()

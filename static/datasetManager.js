@@ -12,6 +12,13 @@ export function initDatasetManager() {
     } else {
         console.warn("Dataset selector element not found");
     }
+
+    const deleteDatasetButton = document.getElementById('deleteDatasetButton');
+    if (deleteDatasetButton) {
+        deleteDatasetButton.addEventListener('click', deleteCurrentDataset);
+    } else {
+        console.warn("Delete dataset button not found");
+    }
 }
 
 function handleDatasetChange(event) {
@@ -46,24 +53,35 @@ export function loadDataset(datasetId) {
 
 function fetchDatasets() {
     fetch('/api/datasets')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(datasets => {
             const datasetSelector = document.getElementById('datasetSelector');
-            if (!datasetSelector) {
-                console.error("Dataset selector element not found");
-                return;
-            }
             datasetSelector.innerHTML = '<option value="">Select a dataset</option>';
-            datasets.forEach(dataset => {
+            if (Array.isArray(datasets) && datasets.length > 0) {
+                datasets.forEach(dataset => {
+                    const option = document.createElement('option');
+                    option.value = dataset.id;
+                    option.textContent = dataset.name;
+                    datasetSelector.appendChild(option);
+                });
+            } else {
+                console.log("No datasets available");
+                // Optionally, add a disabled option to indicate no datasets
                 const option = document.createElement('option');
-                option.value = dataset.id;
-                option.textContent = dataset.name;
+                option.disabled = true;
+                option.textContent = "No datasets available";
                 datasetSelector.appendChild(option);
-            });
-            // Ensure "Select a dataset" is selected
-            datasetSelector.value = "";
+            }
         })
-        .catch(error => console.error('Error fetching datasets:', error));
+        .catch(error => {
+            console.error('Error fetching datasets:', error);
+            // Handle the error, maybe show a message to the user
+        });
 }
 
 function clearExistingData() {
@@ -104,37 +122,37 @@ export function deleteCurrentDataset() {
     const currentDatasetId = datasetSelector.value;
 
     if (!currentDatasetId) {
-        alert('No dataset selected');
+        console.log('No dataset selected');
         return;
     }
 
-    if (confirm('Are you sure you want to delete this dataset?')) {
-        fetch(`/api/dataset/${currentDatasetId}`, {
-            method: 'DELETE',
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(result => {
-            console.log('Dataset deleted:', result);
-            // Remove the deleted dataset from the selector
-            const option = datasetSelector.querySelector(`option[value="${currentDatasetId}"]`);
-            if (option) {
-                option.remove();
-            }
-            // Reset the selector to "Select a dataset"
-            datasetSelector.value = "";
-            // Clear the visualization
-            clearExistingData();
-            // Optionally, load the most recent dataset
-            loadMostRecentDataset();
-        })
-        .catch(error => {
-            console.error('Error deleting dataset:', error);
-            alert('Failed to delete dataset. Please try again.');
-        });
-    }
+    fetch(`/api/dataset/${currentDatasetId}`, {
+        method: 'DELETE',
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(result => {
+        console.log('Dataset deleted:', result);
+        // Remove the deleted dataset from the selector
+        const option = datasetSelector.querySelector(`option[value="${currentDatasetId}"]`);
+        if (option) {
+            option.remove();
+        }
+        // Reset the selector to "Select a dataset"
+        datasetSelector.value = "";
+        // Clear the visualization
+        clearExistingData();
+        // Update the dataset list
+        fetchDatasets();
+        // Optionally, show a message to the user
+        console.log("Dataset deleted successfully. Select another dataset to view.");
+    })
+    .catch(error => {
+        console.error('Error deleting dataset:', error);
+        // Handle the error, maybe show a message to the user
+    });
 }

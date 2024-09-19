@@ -81,41 +81,9 @@ def create_default_dataset():
         traceback.print_exc()
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
-def ensure_default_dataset():
-    # Check if any datasets exist
-    existing_datasets = db.execute_query("SELECT COUNT(*) as count FROM Datasets")
-    if existing_datasets[0]['count'] > 0:
-        return  # Do nothing if any datasets exist
-
-    default_dataset_name = "HuGe VisiON Default Dataset"
-    dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (default_dataset_name,))[0]['id']
-    
-    # Generate default data
-    default_nodes = [
-        ('Node 1', 'Default', 0, 0, 0, dataset_id),
-        ('Node 2', 'Default', 50, 50, 50, dataset_id),
-        ('Node 3', 'Default', -50, -50, -50, dataset_id)
-    ]
-    for node in default_nodes:
-        db.execute_query("INSERT INTO Nodes (name, type, x, y, z, dataset_id) VALUES (%s, %s, %s, %s, %s, %s)", node)
-    
-    node_ids = db.execute_query("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (dataset_id,))
-    node_ids = [row['id'] for row in node_ids]
-
-    default_connections = [
-        (node_ids[0], node_ids[1], 'Default', dataset_id),
-        (node_ids[1], node_ids[2], 'Default', dataset_id),
-        (node_ids[2], node_ids[0], 'Default', dataset_id)
-    ]
-    for conn in default_connections:
-        db.execute_query("INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s)", conn)
-    
-    print(f"Default dataset created with ID: {dataset_id}")
-
 @app.before_request
 def before_request():
-    if request.endpoint == 'get_datasets':
-        ensure_default_dataset()
+    pass
 
 @app.route('/')
 def index():
@@ -209,8 +177,6 @@ def update_node():
 @app.route('/api/connections')
 def get_connections():
     try:
-        dataset_id = ensure_default_dataset()
-
         node_ids = request.args.get('node_ids', '').split(',')
         node_ids = [int(id) for id in node_ids if id and id.lower() != 'undefined']
 
@@ -331,15 +297,7 @@ def sync_data():
 def get_datasets():
     try:
         datasets = db.execute_query("SELECT id, name FROM Datasets")
-        if not datasets:
-            # Create default dataset if no datasets exist
-            response = create_default_dataset()
-            if response[1] == 201:
-                datasets = db.execute_query("SELECT id, name FROM Datasets")
-            else:
-                return response
-
-        return jsonify(datasets)
+        return jsonify(datasets if datasets else [])
     except Exception as e:
         print(f"Error fetching datasets: {str(e)}")
         return jsonify({'error': str(e)}), 500

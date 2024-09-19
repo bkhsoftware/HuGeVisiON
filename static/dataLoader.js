@@ -3,6 +3,8 @@ import { addConnection, loadedConnections, clearConnections } from './connection
 import { MAX_NODES, MAX_CONNECTIONS, RENDER_DISTANCE } from './config.js'
 import { camera } from './core.js';
 import { updateVisibleElements } from './utils.js';
+import { scene } from './core.js';
+import { lines } from './connectionManager.js';
 
 let currentPage = 1;
 const perPage = 100;
@@ -96,6 +98,13 @@ function loadMostRecentDataset() {
 }
 
 export function loadNodesInView() {
+    const currentDatasetId = getCurrentDatasetId();
+    if (!currentDatasetId) {
+        console.log("No dataset selected. Skipping node loading.");
+        clearExistingData();  // Clear the visualization when no dataset is selected
+        return;
+    }
+
     const now = Date.now();
     if (now - lastFetchTime < FETCH_COOLDOWN) {
         return; // Don't fetch if we've fetched recently
@@ -103,11 +112,6 @@ export function loadNodesInView() {
     lastFetchTime = now;
 
     const position = camera.position;
-    const currentDatasetId = getCurrentDatasetId(); // You need to implement this function
-    if (!currentDatasetId) {
-        console.log("No dataset selected. Skipping node loading.");
-        return;
-    }
 
     const url = `/api/nodes?dataset_id=${currentDatasetId}&page=${currentPage}&per_page=${perPage}&x=${position.x}&y=${position.y}&z=${position.z}&radius=${RENDER_DISTANCE}`;
 
@@ -122,7 +126,25 @@ export function loadNodesInView() {
             if (data.error) {
                 throw new Error(data.error);
             }
-            // ... rest of the function remains the same
+            if (data.nodes && data.nodes.length > 0) {
+                console.log(`Loaded ${data.nodes.length} nodes`);
+                data.nodes.forEach(node => {
+                    if (!nodes[node.id]) {
+                        addNode(node);
+                    }
+                });
+
+                if (currentPage < data.total_pages && Object.keys(nodes).length < MAX_NODES) {
+                    currentPage++;
+                    loadNodesInView();
+                } else {
+                    currentPage = 1;
+                    loadConnections();
+                }
+                updateVisibleElements();
+            } else {
+                console.log("No nodes found in the current view.");
+            }
         })
         .catch(error => {
             console.error('Error loading nodes:', error);
@@ -178,6 +200,32 @@ export function cleanupCache() {
             delete connectionCache[id];
         }
     });
+}
+
+export function clearExistingData() {
+    // Clear nodes
+    Object.values(nodes).forEach(node => {
+        scene.remove(node);
+    });
+    Object.keys(nodes).forEach(key => delete nodes[key]);
+
+    // Clear connections
+    Object.values(lines).forEach(line => {
+        scene.remove(line);
+    });
+    Object.keys(lines).forEach(key => delete lines[key]);
+    loadedConnections.clear();
+
+    // Reset caches
+    nodeCache = {};
+    connectionCache = {};
+
+    // Reset pagination
+    currentPage = 1;
+    totalPages = 1;
+
+    // Update the scene
+    updateVisibleElements();
 }
 
 function createDefaultDataset() {
