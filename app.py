@@ -16,38 +16,40 @@ app.config['SECRET_KEY'] = Config.SECRET_KEY
 db = Database.get_instance()
 
 def ensure_default_dataset():
-    default_dataset_name = "HuGe VisiON Default Dataset"
-    dataset = db.execute_query("SELECT id FROM Datasets WHERE name = %s", (default_dataset_name,))
-    
-    if not dataset:
-        # Create the default dataset
-        dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (default_dataset_name,))[0]['id']
-        
-        # Generate default data
-        default_nodes = [
-            ('Node 1', 'Default', 0, 0, 0, dataset_id),
-            ('Node 2', 'Default', 50, 50, 50, dataset_id),
-            ('Node 3', 'Default', -50, -50, -50, dataset_id)
-        ]
-        db.execute_many("INSERT INTO Nodes (name, type, x, y, z, dataset_id) VALUES (%s, %s, %s, %s, %s, %s)", default_nodes)
-        
-        node_ids = db.execute_query("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (dataset_id,))
-        node_ids = [row['id'] for row in node_ids]
+    # Check if any datasets exist
+    existing_datasets = db.execute_query("SELECT COUNT(*) as count FROM Datasets")
+    if existing_datasets[0]['count'] > 0:
+        return  # Do nothing if any datasets exist
 
-        default_connections = [
-            (node_ids[0], node_ids[1], 'Default', dataset_id),
-            (node_ids[1], node_ids[2], 'Default', dataset_id),
-            (node_ids[2], node_ids[0], 'Default', dataset_id)
-        ]
-        db.execute_many("INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s)", default_connections)
-    else:
-        dataset_id = dataset[0]['id']
+    default_dataset_name = "HuGe VisiON Default Dataset"
+    dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (default_dataset_name,))[0]['id']
     
-    return dataset_id
+    # Generate default data
+    default_nodes = [
+        ('Node 1', 'Default', 0, 0, 0, dataset_id),
+        ('Node 2', 'Default', 50, 50, 50, dataset_id),
+        ('Node 3', 'Default', -50, -50, -50, dataset_id)
+    ]
+    for node in default_nodes:
+        db.execute_query("INSERT INTO Nodes (name, type, x, y, z, dataset_id) VALUES (%s, %s, %s, %s, %s, %s)", node)
+    
+    node_ids = db.execute_query("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (dataset_id,))
+    node_ids = [row['id'] for row in node_ids]
+
+    default_connections = [
+        (node_ids[0], node_ids[1], 'Default', dataset_id),
+        (node_ids[1], node_ids[2], 'Default', dataset_id),
+        (node_ids[2], node_ids[0], 'Default', dataset_id)
+    ]
+    for conn in default_connections:
+        db.execute_query("INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s)", conn)
+    
+    print(f"Default dataset created with ID: {dataset_id}")
 
 @app.before_request
 def before_request():
-    ensure_default_dataset()
+    if request.endpoint == 'get_datasets':
+        ensure_default_dataset()
 
 @app.route('/')
 def index():
@@ -195,8 +197,8 @@ def load_data():
     try:
         data = request.json
         
-        # Create a new dataset
-        dataset_name = f"Imported Dataset {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        # Use the provided name or generate a default one
+        dataset_name = data.get('name', f"Imported Dataset {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (dataset_name,))[0]['id']
 
         # Insert new nodes
@@ -257,6 +259,7 @@ def get_datasets():
 def get_dataset(dataset_id):
     nodes = db.execute_query("SELECT * FROM Nodes WHERE dataset_id = %s", (dataset_id,))
     connections = db.execute_query("SELECT * FROM Connections WHERE dataset_id = %s", (dataset_id,))
+    print(f"Retrieved dataset {dataset_id}: {len(nodes)} nodes and {len(connections)} connections")
     return jsonify({'nodes': nodes, 'connections': connections})
 
 @app.route('/api/dataset', methods=['POST'])

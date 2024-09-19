@@ -75,14 +75,16 @@ function initLabelToggle() {
 }
 
 function initDatasetSelector() {
-    const datasetSelect = document.createElement('select');
-    datasetSelect.id = 'datasetSelector';
-    document.getElementById('controls').appendChild(datasetSelect);
-
+    const datasetSelect = document.getElementById('datasetSelector');
+    
     fetchDatasets();
 
     datasetSelect.addEventListener('change', (e) => {
-        loadDataset(e.target.value);
+        if (e.target.value) {
+            loadDataset(e.target.value);
+        } else {
+            clearExistingData();
+        }
     });
 }
 
@@ -313,6 +315,8 @@ function fetchDatasets() {
                 option.textContent = dataset.name;
                 datasetSelect.appendChild(option);
             });
+            // Ensure "Select a dataset" is selected
+            datasetSelect.value = "";
         });
 }
 
@@ -382,6 +386,18 @@ function loadDataFromFile(event) {
             try {
                 const data = JSON.parse(e.target.result);
                 
+                // Prompt the user for a dataset name
+                const defaultName = file.name.replace(/\.[^/.]+$/, ""); // Remove file extension
+                const datasetName = prompt("Enter a name for this dataset:", defaultName);
+                
+                if (datasetName === null) {
+                    console.log("Dataset import cancelled by user");
+                    return;
+                }
+
+                // Add the dataset name to the data object
+                data.name = datasetName;
+                
                 // Send data to server to create a new dataset
                 fetch('/api/load_data', {
                     method: 'POST',
@@ -438,6 +454,9 @@ function clearExistingData() {
 
     // Clear info panel
     hideNodeInfo();
+
+    // Update the scene
+    updateVisibleElements();
 }
 
 function loadNodesFromData(nodesData) {
