@@ -15,7 +15,8 @@ const FETCH_COOLDOWN = 5000;
 
 
 export function initDataLoader() {
-    loadMostRecentDataset();
+    // Don't load any dataset by default
+    console.log("Data loader initialized. No dataset loaded by default.");
 }
 
 export function loadDataset(datasetId) {
