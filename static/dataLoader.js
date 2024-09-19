@@ -18,45 +18,79 @@ export function initDataLoader() {
     loadMostRecentDataset();
 }
 
-function loadMostRecentDataset() {
-    fetch('/api/most_recent_dataset')
+export function loadDataset(datasetId) {
+    if (!datasetId) {
+        console.error('No dataset ID provided');
+        return Promise.reject(new Error('No dataset ID provided'));
+    }
+
+    return fetch(`/api/dataset/${datasetId}`)
         .then(response => {
             if (!response.ok) {
-                throw new Error('No dataset found');
+                if (response.status === 404) {
+                    throw new Error(`Dataset with id ${datasetId} not found`);
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            if (data.nodes && data.nodes.length > 0 && data.connections) {
-                console.log(`Loading most recent dataset with ${data.nodes.length} nodes and ${data.connections.length} connections`);
+            if (data.nodes && data.connections) {
+                console.log(`Loading dataset ${datasetId} with ${data.nodes.length} nodes and ${data.connections.length} connections`);
                 
                 // Clear existing data
                 clearNodes();
                 clearConnections();
-                nodeCache = {};
-                connectionCache = {};
-
+                
                 // Load new data
                 data.nodes.forEach(node => {
-                    nodeCache[node.id] = node;
                     addNode(node);
                 });
 
                 data.connections.forEach(connection => {
-                    connectionCache[connection.id] = connection;
-                    if (nodes[connection.from_node_id] && nodes[connection.to_node_id]) {
-                        addConnection(connection);
-                    }
+                    addConnection(connection);
                 });
 
                 updateVisibleElements();
             } else {
-                console.log("Dataset is empty. Starting with an empty visualization.");
+                console.log(`Dataset ${datasetId} is empty or not found.`);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading dataset:', error);
+            // Handle the error appropriately, maybe show a message to the user
+        });
+}
+
+function loadMostRecentDataset() {
+    fetch('/api/most_recent_dataset')
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.log("No datasets found. Creating a default dataset.");
+                    return createDefaultDataset();
+                }
+                throw new Error('Error fetching dataset');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.dataset && data.dataset.id) {
+                return loadDataset(data.dataset.id);
+            } else if (data.dataset_id) {
+                return loadDataset(data.dataset_id);
+            } else {
+                console.log("No valid dataset found or created.");
+                return null;
             }
         })
         .catch(error => {
             console.error('Error loading most recent dataset:', error);
-            loadNodesInView(); // Attempt to load nodes if no dataset is found
+            // You might want to add some user feedback here
+        })
+        .finally(() => {
+            // Ensure the visualization is started even if no data is loaded
+            startVisualization();
         });
 }
 
@@ -68,42 +102,35 @@ export function loadNodesInView() {
     lastFetchTime = now;
 
     const position = camera.position;
-    const url = `/api/nodes?page=${currentPage}&per_page=${perPage}&x=${position.x}&y=${position.y}&z=${position.z}&radius=${RENDER_DISTANCE}`;
+    const currentDatasetId = getCurrentDatasetId(); // You need to implement this function
+    if (!currentDatasetId) {
+        console.log("No dataset selected. Skipping node loading.");
+        return;
+    }
+
+    const url = `/api/nodes?dataset_id=${currentDatasetId}&page=${currentPage}&per_page=${perPage}&x=${position.x}&y=${position.y}&z=${position.z}&radius=${RENDER_DISTANCE}`;
 
     fetch(url)
         .then(response => {
             if (!response.ok) {
-                throw new Error('No nodes found');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            if (data.nodes && data.nodes.length > 0) {
-                console.log(`Loaded ${data.nodes.length} nodes`);
-                totalPages = data.total_pages;
-                data.nodes.forEach(node => {
-                    if (!nodeCache[node.id]) {
-                        nodeCache[node.id] = node;
-                        addNode(node);
-                    }
-                });
-
-                if (currentPage < totalPages && Object.keys(nodes).length < MAX_NODES) {
-                    currentPage++;
-                    loadNodesInView();
-                } else {
-                    currentPage = 1;
-                    loadConnections();
-                }
-                updateVisibleElements();
-            } else {
-                console.log("No nodes found in the current view.");
+            if (data.error) {
+                throw new Error(data.error);
             }
+            // ... rest of the function remains the same
         })
         .catch(error => {
             console.error('Error loading nodes:', error);
-            // You might want to add some user feedback here
         });
+}
+
+function getCurrentDatasetId() {
+    const datasetSelector = document.getElementById('datasetSelector');
+    return datasetSelector ? datasetSelector.value : null;
 }
 
 export function loadConnections() {
@@ -152,4 +179,27 @@ export function cleanupCache() {
     });
 }
 
-// ... (other data loading functions)
+function createDefaultDataset() {
+    return fetch('/api/create_default_dataset', {
+        method: 'POST',
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Default dataset created:', data);
+        if (data.dataset && data.dataset.id) {
+            return loadDataset(data.dataset.id);
+        } else {
+            throw new Error('No dataset_id returned after creating default dataset');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating default dataset:', error);
+        // Handle the error appropriately, maybe show a message to the user
+    });
+}
+

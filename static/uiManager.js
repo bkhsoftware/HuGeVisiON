@@ -3,6 +3,7 @@ import { nodes, addNode, pinnedNode, setPinnedNode, setShowLabels } from './node
 import { lines, loadedConnections, addConnection } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
+import { initDatasetManager, loadDataset, deleteCurrentDataset } from './datasetManager.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
 import * as THREE from './lib/three.module.js';
 
@@ -18,7 +19,7 @@ export function initUIManager() {
     initControls();
     initSaveLoadButtons();
     initLabelToggle();
-    initDatasetSelector();
+    initDatasetManager();
     initDeleteDatasetButton();
 }
 
@@ -71,20 +72,6 @@ function initLabelToggle() {
     const showLabelsCheckbox = document.getElementById('showLabels');
     showLabelsCheckbox.addEventListener('change', (e) => {
         setShowLabels(e.target.checked);
-    });
-}
-
-function initDatasetSelector() {
-    const datasetSelect = document.getElementById('datasetSelector');
-    
-    fetchDatasets();
-
-    datasetSelect.addEventListener('change', (e) => {
-        if (e.target.value) {
-            loadDataset(e.target.value);
-        } else {
-            clearExistingData();
-        }
     });
 }
 
@@ -147,12 +134,19 @@ export function showNodeInfo(node) {
 }
 
 export function togglePinNode(node) {
-    if (pinnedNode === node) {
-        setPinnedNode(null);
-        document.getElementById('pinNodeButton').textContent = 'Pin';
+    const pinButton = document.getElementById('pinButton');
+    if (pinButton) {
+        if (pinnedNode === node) {
+            pinnedNode = null;
+            pinButton.textContent = 'Pin';
+            hideInfoPanelWithDelay();
+        } else {
+            pinnedNode = node;
+            pinButton.textContent = 'Unpin';
+            showNodeInfo(node);
+        }
     } else {
-        setPinnedNode(node);
-        document.getElementById('pinNodeButton').textContent = 'Unpin';
+        console.warn("Pin button element not found");
     }
 }
 
@@ -303,41 +297,6 @@ function positionPanelWithinWindow(panel) {
     }
 }
 
-function fetchDatasets() {
-    fetch('/api/datasets')
-        .then(response => response.json())
-        .then(datasets => {
-            const datasetSelect = document.getElementById('datasetSelector');
-            datasetSelect.innerHTML = '<option value="">Select a dataset</option>';
-            datasets.forEach(dataset => {
-                const option = document.createElement('option');
-                option.value = dataset.id;
-                option.textContent = dataset.name;
-                datasetSelect.appendChild(option);
-            });
-            // Ensure "Select a dataset" is selected
-            datasetSelect.value = "";
-        });
-}
-
-function loadDataset(datasetId) {
-    if (!datasetId) return;
-
-    fetch(`/api/dataset/${datasetId}`)
-        .then(response => response.json())
-        .then(data => {
-            clearExistingData();
-            loadNodesFromData(data.nodes);
-            loadConnectionsFromData(data.connections);
-            updateVisibleElements();
-            focusOnAllNodes();
-            
-            // Set the selected dataset in the dropdown
-            const datasetSelect = document.getElementById('datasetSelector');
-            datasetSelect.value = datasetId;
-        });
-}
-
 function saveData() {
     const data = {
         name: prompt("Enter a name for this dataset:"),
@@ -434,70 +393,8 @@ function loadDataFromFile(event) {
     }
 }
 
-function clearExistingData() {
-    // Clear nodes
-    Object.values(nodes).forEach(node => {
-        scene.remove(node);
-    });
-    Object.keys(nodes).forEach(key => delete nodes[key]);
-
-    // Clear connections
-    Object.values(lines).forEach(line => {
-        scene.remove(line);
-    });
-    Object.keys(lines).forEach(key => delete lines[key]);
-    loadedConnections.clear();
-
-    // Reset any pinned or hovered nodes
-    setPinnedNode(null);
-    hoveredNode = null;
-
-    // Clear info panel
-    hideNodeInfo();
-
-    // Update the scene
-    updateVisibleElements();
-}
-
-function loadNodesFromData(nodesData) {
-    nodesData.forEach(nodeData => {
-        addNode(nodeData, false); // Add node without adding to scene
-    });
-}
-
-function loadConnectionsFromData(connectionsData) {
-    connectionsData.forEach(connectionData => {
-        addConnection(connectionData, false); // Add connection without adding to scene
-    });
-}
-
 function initDeleteDatasetButton() {
     const deleteDatasetButton = document.getElementById('deleteDatasetButton');
     deleteDatasetButton.addEventListener('click', deleteCurrentDataset);
-}
-
-function deleteCurrentDataset() {
-    const datasetSelect = document.getElementById('datasetSelector');
-    const currentDatasetId = datasetSelect.value;
-
-    if (!currentDatasetId) {
-        alert('No dataset selected');
-        return;
-    }
-
-    if (confirm('Are you sure you want to delete this dataset?')) {
-        fetch(`/api/dataset/${currentDatasetId}`, {
-            method: 'DELETE',
-        })
-        .then(response => response.json())
-        .then(result => {
-            console.log('Dataset deleted:', result);
-            fetchDatasets();
-            clearExistingData();
-        })
-        .catch(error => {
-            console.error('Error deleting dataset:', error);
-        });
-    }
 }
 

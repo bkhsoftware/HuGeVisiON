@@ -33,3 +33,7 @@ Thumbs.db
 
 # Keep test data private
 testdata/
+
+# Keep uploads private, but keep the folder in git
+uploads/*
+!uploads/

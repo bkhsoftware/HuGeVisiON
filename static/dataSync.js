@@ -6,29 +6,44 @@ export function initDataSync() {
     setInterval(syncDataWithServer, 300000); // Sync every 5 minutes
 }
 
-export function syncDataWithServer() {
+function syncDataWithServer() {
+    const nodeData = nodes ? Object.values(nodes).map(node => node.userData) : [];
+    const connectionData = lines ? Object.values(lines).map(line => line.userData) : [];
+
     const data = {
-        nodes: Object.values(nodes).map(node => node.userData),
-        connections: Object.values(lines).map(line => line.userData)
+        nodes: nodeData,
+        connections: connectionData
     };
 
-    fetch('/api/sync_data', {
+    return fetch('/api/sync_data', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(data)
     })
-    .then(response => response.json())
-    .then(result => {
-        /*console.log('Sync result:', result);*/
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Sync successful:', data);
     })
     .catch(error => {
-        console.error('Sync error:', error);
+        console.error('Error during sync:', error);
+        // You might want to implement some retry logic or user notification here
     });
 }
 
-// Function to trigger sync after significant changes
+let syncTimeout = null;
+
 export function triggerSync() {
-    syncDataWithServer();
+    if (syncTimeout) {
+        clearTimeout(syncTimeout);
+    }
+    syncTimeout = setTimeout(() => {
+        syncDataWithServer();
+    }, 1000);  // Delay sync by 1 second to batch rapid changes
 }

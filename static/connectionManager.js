@@ -12,6 +12,10 @@ export function initConnectionManager() {
     // ... (existing connection-related initialization)
 }
 
+export function getLines() {
+    return lines;
+}
+
 export function addConnection(connection, addToScene = true) {
     const startNode = nodes[connection.from_node_id];
     const endNode = nodes[connection.to_node_id];

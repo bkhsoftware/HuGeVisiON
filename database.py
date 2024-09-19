@@ -6,6 +6,13 @@ from contextlib import contextmanager
 class Database:
     _instance = None
 
+    def debug_connection(self):
+        if self.conn:
+            print(f"Connection status: {'open' if not self.conn.closed else 'closed'}")
+            print(f"Connection parameters: {self.conn.get_dsn_parameters()}")
+        else:
+            print("No active connection")
+
     @staticmethod
     def get_instance():
         if Database._instance is None:
@@ -44,6 +51,7 @@ class Database:
                 host=os.environ.get('DB_HOST', 'localhost')
             )
             print("Database connection established successfully.")
+            self.debug_connection()
         except psycopg2.Error as e:
             print(f"Error while connecting to PostgreSQL: {e}")
             raise

@@ -1,9 +1,17 @@
+import { scene } from './core.js';
+import { getNodes, addNode, clearNodes } from './nodeManager.js';
+import { getLines, addConnection, loadedConnections, clearConnections } from './connectionManager.js';
+import { genealogyMode } from './modes/genealogyMode.js';
+import { loadDataset } from './dataLoader.js';
+
+const plugins = {};
 let currentMode = null;
 const modes = {};
-const plugins = {};
 
 export function initModeManager() {
-    window.registerMode = registerMode;
+    registerMode('No Mode', { name: 'No Mode', activate: () => {}, deactivate: () => {} });
+    registerMode('Genealogy', genealogyMode);
+    
     const modeSelect = document.getElementById('modeSelect');
     if (modeSelect) {
         modeSelect.addEventListener('change', (e) => {
@@ -12,6 +20,9 @@ export function initModeManager() {
     } else {
         console.warn("Mode select element not found");
     }
+
+    // Set initial mode to 'No Mode'
+    setMode('No Mode');
 }
 
 export function registerMode(name, modeImplementation) {
@@ -30,10 +41,29 @@ export function setMode(modeName) {
         currentMode.deactivate();
     }
     currentMode = modes[modeName];
-    if (currentMode && currentMode.activate) {
-        currentMode.activate();
+    if (currentMode) {
+        if (currentMode.activate) {
+            currentMode.activate();
+        }
+        currentMode.loadDataset = loadDataset;
+        if (currentMode.initialize) {
+            currentMode.initialize().then(() => {
+                if (modeName !== 'No Mode') {
+                    updateVisualization();
+                } else {
+                    clearVisualization();
+                }
+            }).catch(error => {
+                console.error("Error initializing mode:", error);
+            });
+        } else {
+            if (modeName !== 'No Mode') {
+                updateVisualization();
+            } else {
+                clearVisualization();
+            }
+        }
     }
-    updateVisualization();
 }
 
 export function initPluginSystem() {
@@ -43,20 +73,38 @@ export function initPluginSystem() {
 }
 
 export function updateVisualization() {
-    // Clear existing nodes and connections
+    console.log("Updating visualization for mode:", currentMode ? currentMode.name : "No mode");
     clearScene();
+  
+    const nodes = getNodes();
+    const lines = getLines();
 
     // Load data through the current mode's data interpreter if available
     let data;
     if (currentMode && currentMode.interpretData) {
-        data = currentMode.interpretData(rawData);
+        data = currentMode.interpretData();
     } else {
-        data = { nodes: Object.values(nodes), connections: Object.values(lines) };
+        data = { 
+            nodes: Object.values(nodes), 
+            connections: Object.values(lines)
+        };
     }
 
+    console.log("Data for visualization:", data);
+
     // Create nodes and connections based on the interpreted data
-    data.nodes.forEach(node => addNode(node));
-    data.connections.forEach(conn => addConnection(conn));
+    if (data.nodes && Array.isArray(data.nodes)) {
+        data.nodes.forEach(node => {
+            console.log("Adding node:", node);
+            addNode(node);
+        });
+    }
+    if (data.connections && Array.isArray(data.connections)) {
+        data.connections.forEach(conn => {
+            console.log("Adding connection:", conn);
+            addConnection(conn);
+        });
+    }
 
     // Apply mode-specific visual customizations if available
     if (currentMode && currentMode.customizeVisuals) {
@@ -65,13 +113,12 @@ export function updateVisualization() {
 }
 
 export function clearScene() {
-    // Remove all nodes and lines from the scene
+    const nodes = getNodes();
+    const lines = getLines();
     Object.values(nodes).forEach(node => scene.remove(node));
     Object.values(lines).forEach(line => scene.remove(line));
-    nodes = {};
-    lines = {};
-    loadedNodes.clear();
-    loadedConnections.clear();
+    clearNodes();
+    clearConnections();
 }
 
 export function userAddNode(nodeData) {
@@ -102,3 +149,12 @@ export function userAddConnection(connData) {
     updateVisualization();
 }
 
+function clearVisualization() {
+    // Clear all nodes and connections from the scene
+    clearNodes();
+    clearConnections();
+    // Update the scene
+    updateVisualization();
+}
+
+export { currentMode };

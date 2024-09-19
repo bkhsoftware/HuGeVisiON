@@ -8,20 +8,34 @@ import { initUIManager } from './uiManager.js';
 import { initDataLoader, cleanupCache } from './dataLoader.js';
 import { initModeManager, userAddNode, userAddConnection } from './modeManager.js';
 import { initDataSync, triggerSync } from './dataSync.js';
+import { initDatasetManager } from './datasetManager.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded. Initializing visualization...');
-    initCore();
-    initInputManager();
-    initNodeManager();
-    initConnectionManager();
-    initCameraControls();
-    initUIManager();
-    initDataLoader();
-    initModeManager();
-    initDataSync();
-    animate();
+    try {
+        initCore();
+        initInputManager();
+        initNodeManager();
+        initConnectionManager();
+        initCameraControls();
+        initUIManager();
+        initModeManager();
+        initDataSync();
+        initDatasetManager();
+        
+        // Start the animation loop immediately
+        animate();
+        
+        // Load data after everything else is initialized
+        initDataLoader();
+    } catch (error) {
+        console.error('Error during initialization:', error);
+    }
 });
+
+export function startVisualization() {
+    animate();
+}
 
 // Expose necessary functions to the global scope
 window.userAddNode = userAddNode;

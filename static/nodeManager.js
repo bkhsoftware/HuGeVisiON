@@ -4,7 +4,7 @@ import * as THREE from './lib/three.module.js';
 import { infoPanel, hideInfoPanelWithDelay, showNodeInfo, showInfoPanelWithDelay } from './uiManager.js';
 import { triggerSync } from './dataSync.js';
 
-let nodes = {};
+export let nodes = {};
 const MAX_NODES = 1000;
 let hoveredNode = null;
 export let pinnedNode = null;
@@ -12,6 +12,10 @@ let showLabels = true;
 
 export function initNodeManager() {
     // ... (existing node-related initialization)
+}
+
+export function getNodes() {
+    return nodes;
 }
 
 export function addNode(node, addToScene = true) {
@@ -147,4 +151,3 @@ export function setPinnedNode(node) {
     pinnedNode = node;
 }
 
-export { nodes };

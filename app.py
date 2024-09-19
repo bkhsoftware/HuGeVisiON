@@ -1,19 +1,85 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, jsonify, request, render_template
+import os
+from flask import Flask, jsonify, request, render_template, send_file
 from database import Database
 from math import ceil
 from config import Config
 import psycopg2
 import json
 import tempfile
-from flask import send_file
 from datetime import datetime
+from werkzeug.utils import secure_filename
+from ged_parser import GEDParser
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'ged'}
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = Config.SECRET_KEY
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 db = Database.get_instance()
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/api/create_default_dataset', methods=['POST'])
+def create_default_dataset():
+    try:
+        existing_default = db.execute_query("SELECT id FROM Datasets WHERE name = 'Default Dataset' LIMIT 1")
+        if existing_default:
+            dataset_id = existing_default[0]['id']
+            return jsonify({'dataset': {'id': dataset_id}, 'message': 'Default dataset already exists'})
+
+        # Insert the dataset and get the ID
+        result = db.execute_query("INSERT INTO Datasets (name) VALUES ('Default Dataset') RETURNING id")
+        if not result or len(result) == 0:
+            raise Exception("Dataset insertion did not return an ID")
+        dataset_id = result[0]['id']
+        
+        print(f"Created dataset with ID: {dataset_id}")  # Debug print
+        
+        # Create some default nodes
+        default_nodes = [
+            ('Node 1', 'Default', 0, 0, 0),
+            ('Node 2', 'Default', 50, 50, 50),
+            ('Node 3', 'Default', -50, -50, -50)
+        ]
+        for name, type, x, y, z in default_nodes:
+            result = db.execute_query("""
+                INSERT INTO Nodes (name, type, x, y, z, dataset_id) 
+                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+            """, (name, type, x, y, z, dataset_id))
+            node_id = result[0]['id']
+            print(f"Created node with ID: {node_id}")  # Debug print
+        
+        # Create some default connections
+        node_ids = db.execute_query("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (dataset_id,))
+        node_ids = [row['id'] for row in node_ids]
+        
+        if len(node_ids) < 3:
+            raise Exception(f"Not enough nodes created. Expected 3, got {len(node_ids)}")
+        
+        default_connections = [
+            (node_ids[0], node_ids[1], 'Default'),
+            (node_ids[1], node_ids[2], 'Default'),
+            (node_ids[2], node_ids[0], 'Default')
+        ]
+        for from_node_id, to_node_id, type in default_connections:
+            result = db.execute_query("""
+                INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) 
+                VALUES (%s, %s, %s, %s) RETURNING id
+            """, (from_node_id, to_node_id, type, dataset_id))
+            conn_id = result[0]['id']
+            print(f"Created connection with ID: {conn_id}")  # Debug print
+
+        return jsonify({'dataset': {'id': dataset_id}, 'message': 'Default dataset created'})
+    except Exception as e:
+        print(f"Error creating default dataset: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 def ensure_default_dataset():
     # Check if any datasets exist
@@ -58,18 +124,25 @@ def index():
 @app.route('/api/most_recent_dataset')
 def get_most_recent_dataset():
     try:
-        dataset_id = ensure_default_dataset()
-        dataset = db.execute_query("SELECT id, name FROM Datasets WHERE id = %s", (dataset_id,))[0]
+        dataset = db.execute_query("SELECT id FROM Datasets ORDER BY id DESC LIMIT 1")
+        if not dataset:
+            return jsonify({'message': 'No datasets found'}), 404
+        
+        dataset_id = dataset[0]['id']
         nodes = db.execute_query("SELECT * FROM Nodes WHERE dataset_id = %s", (dataset_id,))
         connections = db.execute_query("SELECT * FROM Connections WHERE dataset_id = %s", (dataset_id,))
-        return jsonify({'dataset': dataset, 'nodes': nodes, 'connections': connections})
+        
+        return jsonify({'dataset_id': dataset_id, 'nodes': nodes, 'connections': connections})
     except Exception as e:
+        print(f"Error fetching most recent dataset: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/nodes')
 def get_nodes():
     try:
-        dataset_id = ensure_default_dataset()
+        dataset_id = request.args.get('dataset_id')
+        if not dataset_id:
+            return jsonify({'error': 'No dataset_id provided'}), 400
 
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 100))
@@ -86,6 +159,9 @@ def get_nodes():
         LIMIT %s OFFSET %s
         """
         nodes = db.execute_query(query, (dataset_id, x, y, z, radius, per_page, offset))
+
+        if not nodes:
+            return jsonify({'nodes': [], 'page': page, 'per_page': per_page, 'total_pages': 0, 'total_count': 0})
 
         count_query = """
         SELECT COUNT(*) FROM Nodes
@@ -104,6 +180,7 @@ def get_nodes():
             'total_count': total_count
         })
     except Exception as e:
+        print(f"Error in get_nodes: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/update_node', methods=['POST'])
@@ -226,34 +303,46 @@ def sync_data():
     try:
         data = request.json
         
-        # Sync nodes
-        for node in data['nodes']:
-            query = """
-            INSERT INTO Nodes (id, name, type, x, y, z)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE
-            SET name = EXCLUDED.name, type = EXCLUDED.type, x = EXCLUDED.x, y = EXCLUDED.y, z = EXCLUDED.z
-            """
-            db.execute_query(query, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z']))
+        with db.get_cursor() as cur:
+            # Sync nodes
+            for node in data['nodes']:
+                cur.execute("""
+                    INSERT INTO Nodes (id, name, type, x, y, z, dataset_id)
+                    VALUES (%(id)s, %(name)s, %(type)s, %(x)s, %(y)s, %(z)s, %(dataset_id)s)
+                    ON CONFLICT (id) DO UPDATE
+                    SET name = EXCLUDED.name, type = EXCLUDED.type, x = EXCLUDED.x, y = EXCLUDED.y, z = EXCLUDED.z
+                """, node)
 
-        # Sync connections
-        for conn in data['connections']:
-            query = """
-            INSERT INTO Connections (id, from_node_id, to_node_id, type)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE
-            SET from_node_id = EXCLUDED.from_node_id, to_node_id = EXCLUDED.to_node_id, type = EXCLUDED.type
-            """
-            db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type']))
+            # Sync connections
+            for conn in data['connections']:
+                cur.execute("""
+                    INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id)
+                    VALUES (%(id)s, %(from_node_id)s, %(to_node_id)s, %(type)s, %(dataset_id)s)
+                    ON CONFLICT (id) DO UPDATE
+                    SET from_node_id = EXCLUDED.from_node_id, to_node_id = EXCLUDED.to_node_id, type = EXCLUDED.type
+                """, conn)
 
         return jsonify({'message': 'Data synchronized successfully'}), 200
     except Exception as e:
+        print(f"Error in sync_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/datasets', methods=['GET'])
 def get_datasets():
-    datasets = db.execute_query("SELECT id, name FROM Datasets")
-    return jsonify(datasets)
+    try:
+        datasets = db.execute_query("SELECT id, name FROM Datasets")
+        if not datasets:
+            # Create default dataset if no datasets exist
+            response = create_default_dataset()
+            if response[1] == 201:
+                datasets = db.execute_query("SELECT id, name FROM Datasets")
+            else:
+                return response
+
+        return jsonify(datasets)
+    except Exception as e:
+        print(f"Error fetching datasets: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dataset/<int:dataset_id>', methods=['GET'])
 def get_dataset(dataset_id):
@@ -291,17 +380,69 @@ def create_dataset():
 @app.route('/api/dataset/<int:dataset_id>', methods=['DELETE'])
 def delete_dataset(dataset_id):
     try:
-        # Delete connections associated with the dataset
+        # First, delete all connections associated with this dataset
         db.execute_query("DELETE FROM Connections WHERE dataset_id = %s", (dataset_id,))
         
-        # Delete nodes associated with the dataset
+        # Then, delete all nodes associated with this dataset
         db.execute_query("DELETE FROM Nodes WHERE dataset_id = %s", (dataset_id,))
         
-        # Delete the dataset
+        # Finally, delete the dataset itself
         db.execute_query("DELETE FROM Datasets WHERE id = %s", (dataset_id,))
         
-        return jsonify({'message': 'Dataset deleted successfully'}), 200
+        return jsonify({'message': f'Dataset {dataset_id} deleted successfully'}), 200
     except Exception as e:
+        print(f"Error deleting dataset: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/upload_ged', methods=['POST'])
+def upload_ged():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            
+            parser = GEDParser()
+            data = parser.parse_file(file_path)
+            
+            print(f"Parsed data: {data}")
+            
+            # Save parsed data to the database
+            dataset_name = f"GED Import: {filename}"
+            dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (dataset_name,))[0]['id']
+            
+            nodes = []
+            for node in data['nodes']:
+                db.execute_query(
+                    "INSERT INTO Nodes (id, name, type, sex, dataset_id, x, y, z) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (node['id'], node['name'], node['type'], node.get('sex', 'U'), dataset_id, 0, 0, 0)
+                )
+                nodes.append(node)
+            
+            connections = []
+            for conn in data['connections']:
+                db.execute_query(
+                    "INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s)",
+                    (conn['from_node_id'], conn['to_node_id'], conn['type'], dataset_id)
+                )
+                connections.append(conn)
+            
+            print(f"Inserted {len(nodes)} nodes and {len(connections)} connections")
+            
+            return jsonify({
+                'message': 'File uploaded and processed successfully',
+                'dataset_id': dataset_id,
+                'nodes': nodes,
+                'connections': connections
+            })
+        return jsonify({'error': 'File type not allowed'}), 400
+    except Exception as e:
+        print(f"Error in upload_ged: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

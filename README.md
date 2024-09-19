@@ -23,6 +23,7 @@ Present dynamically updated, large and accurate trees of relations which can be 
 - Improved data persistence across page refreshes
 - Enhanced label visibility for nodes
 - JSON data import and export functionality
+- Genealogy mode
 
 ## Prerequisites
 
@@ -104,7 +105,7 @@ You can customize the size of the test dataset by setting the TEST_NUM_NODES and
 ## Project Structure
 
 HuGeVisiON
-├── app.py
+── app.py
 ├── CHANGELOG.md
 ├── config.py
 ├── database
@@ -112,6 +113,7 @@ HuGeVisiON
 ├── database.py
 ├── docs
 │   └── modular-visualization-architecture.md
+├── ged_parser.py
 ├── generate_secret_key.py
 ├── generate_test_data.py
 ├── LICENSE.md
@@ -127,18 +129,22 @@ HuGeVisiON
 │   ├── core.js
 │   ├── data_handler.js
 │   ├── dataLoader.js
+│   ├── dataSync.js
 │   ├── favicon.ico
 │   ├── inputManager.js
 │   ├── lib
 │   │   ├── OrbitControls.js
 │   │   └── three.module.js
 │   ├── modeManager.js
+│   ├── modes
+│   │   └── genealogyMode.js
 │   ├── nodeManager.js
 │   ├── uiManager.js
 │   ├── utils.js
 │   └── visualization.js
 └── templates
     └── index.html
+
 
 Key files and their purposes:
 

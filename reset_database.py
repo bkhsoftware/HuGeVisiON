@@ -50,27 +50,6 @@ def reset_database():
 
     # Create tables
     cur.execute("""
-    CREATE TABLE Nodes (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        x FLOAT NOT NULL,
-        y FLOAT NOT NULL,
-        z FLOAT NOT NULL,
-        url VARCHAR(255)
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE Connections (
-        id SERIAL PRIMARY KEY,
-        from_node_id INTEGER REFERENCES Nodes(id),
-        to_node_id INTEGER REFERENCES Nodes(id),
-        type VARCHAR(50) NOT NULL
-    )
-    """)
-
-    cur.execute("""
     CREATE TABLE Datasets (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL
@@ -78,16 +57,34 @@ def reset_database():
     """)
 
     cur.execute("""
-    ALTER TABLE Nodes
-    ADD COLUMN dataset_id INTEGER REFERENCES Datasets(id)
+    CREATE TABLE Nodes (
+        id SERIAL PRIMARY KEY,
+        dataset_id INTEGER REFERENCES Datasets(id),
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        x FLOAT NOT NULL,
+        y FLOAT NOT NULL,
+        z FLOAT NOT NULL,
+        url VARCHAR(255),
+        sex CHAR(1) NOT NULL DEFAULT 'U',
+        UNIQUE (id, dataset_id)
+    )
     """)
 
     cur.execute("""
-    ALTER TABLE Connections
-    ADD COLUMN dataset_id INTEGER REFERENCES Datasets(id)
+    CREATE TABLE Connections (
+        id SERIAL PRIMARY KEY,
+        from_node_id INTEGER NOT NULL,
+        to_node_id INTEGER NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        dataset_id INTEGER REFERENCES Datasets(id),
+        FOREIGN KEY (from_node_id) REFERENCES Nodes(id),
+        FOREIGN KEY (to_node_id) REFERENCES Nodes(id),
+        FOREIGN KEY (dataset_id) REFERENCES Datasets(id)
+    )
     """)
 
-    print("Created Datasets table and updated Nodes and Connections tables.")
+    print("Created Datasets, Nodes, and Connections tables with updated schema.")
 
     # Close the connection
     cur.close()
