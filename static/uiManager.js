@@ -19,6 +19,7 @@ export function initUIManager() {
     initSaveLoadButtons();
     initLabelToggle();
     initDatasetSelector();
+    initDeleteDatasetButton();
 }
 
 function initControls() {
@@ -326,6 +327,10 @@ function loadDataset(datasetId) {
             loadConnectionsFromData(data.connections);
             updateVisibleElements();
             focusOnAllNodes();
+            
+            // Set the selected dataset in the dropdown
+            const datasetSelect = document.getElementById('datasetSelector');
+            datasetSelect.value = datasetId;
         });
 }
 
@@ -374,12 +379,40 @@ function loadDataFromFile(event) {
     if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            const data = JSON.parse(e.target.result);
-            clearExistingData();
-            loadNodesFromData(data.nodes);
-            loadConnectionsFromData(data.connections);
-            updateVisibleElements();
-            focusOnAllNodes(); // Add this line
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                // Send data to server to create a new dataset
+                fetch('/api/load_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    if (result.error) {
+                        throw new Error(result.error);
+                    }
+                    console.log('Dataset created:', result);
+                    clearExistingData();
+                    loadDataset(result.dataset_id);
+                    fetchDatasets();  // Refresh the dataset list
+                })
+                .catch(error => {
+                    console.error('Error creating dataset:', error);
+                    alert(`Error creating dataset: ${error.message}`);
+                });
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                alert(`Error parsing JSON: ${error.message}`);
+            }
         };
         reader.readAsText(file);
     }
@@ -417,5 +450,35 @@ function loadConnectionsFromData(connectionsData) {
     connectionsData.forEach(connectionData => {
         addConnection(connectionData, false); // Add connection without adding to scene
     });
+}
+
+function initDeleteDatasetButton() {
+    const deleteDatasetButton = document.getElementById('deleteDatasetButton');
+    deleteDatasetButton.addEventListener('click', deleteCurrentDataset);
+}
+
+function deleteCurrentDataset() {
+    const datasetSelect = document.getElementById('datasetSelector');
+    const currentDatasetId = datasetSelect.value;
+
+    if (!currentDatasetId) {
+        alert('No dataset selected');
+        return;
+    }
+
+    if (confirm('Are you sure you want to delete this dataset?')) {
+        fetch(`/api/dataset/${currentDatasetId}`, {
+            method: 'DELETE',
+        })
+        .then(response => response.json())
+        .then(result => {
+            console.log('Dataset deleted:', result);
+            fetchDatasets();
+            clearExistingData();
+        })
+        .catch(error => {
+            console.error('Error deleting dataset:', error);
+        });
+    }
 }
 

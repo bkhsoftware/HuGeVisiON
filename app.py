@@ -9,33 +9,41 @@ import psycopg2
 import json
 import tempfile
 from flask import send_file
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = Config.SECRET_KEY
 db = Database.get_instance()
 
 def ensure_default_dataset():
-    dataset = db.execute_query("SELECT id FROM Datasets ORDER BY id DESC LIMIT 1")
+    default_dataset_name = "HuGe VisiON Default Dataset"
+    dataset = db.execute_query("SELECT id FROM Datasets WHERE name = %s", (default_dataset_name,))
+    
     if not dataset:
-        # Create a default dataset
-        dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES ('Default Dataset') RETURNING id")[0]['id']
+        # Create the default dataset
+        dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (default_dataset_name,))[0]['id']
         
-        # Add some default nodes and connections
+        # Generate default data
         default_nodes = [
-            (1, 'Node 1', 'Default', 0, 0, 0, dataset_id),
-            (2, 'Node 2', 'Default', 50, 50, 50, dataset_id),
-            (3, 'Node 3', 'Default', -50, -50, -50, dataset_id)
+            ('Node 1', 'Default', 0, 0, 0, dataset_id),
+            ('Node 2', 'Default', 50, 50, 50, dataset_id),
+            ('Node 3', 'Default', -50, -50, -50, dataset_id)
         ]
-        db.execute_many("INSERT INTO Nodes (id, name, type, x, y, z, dataset_id) VALUES (%s, %s, %s, %s, %s, %s, %s)", default_nodes)
+        db.execute_many("INSERT INTO Nodes (name, type, x, y, z, dataset_id) VALUES (%s, %s, %s, %s, %s, %s)", default_nodes)
         
+        node_ids = db.execute_query("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (dataset_id,))
+        node_ids = [row['id'] for row in node_ids]
+
         default_connections = [
-            (1, 1, 2, 'Default', dataset_id),
-            (2, 2, 3, 'Default', dataset_id),
-            (3, 3, 1, 'Default', dataset_id)
+            (node_ids[0], node_ids[1], 'Default', dataset_id),
+            (node_ids[1], node_ids[2], 'Default', dataset_id),
+            (node_ids[2], node_ids[0], 'Default', dataset_id)
         ]
-        db.execute_many("INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s, %s)", default_connections)
-        return dataset_id
-    return dataset[0]['id']
+        db.execute_many("INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id) VALUES (%s, %s, %s, %s)", default_connections)
+    else:
+        dataset_id = dataset[0]['id']
+    
+    return dataset_id
 
 @app.before_request
 def before_request():
@@ -188,7 +196,7 @@ def load_data():
         data = request.json
         
         # Create a new dataset
-        dataset_name = "Loaded Dataset " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        dataset_name = f"Imported Dataset {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (dataset_name,))[0]['id']
 
         # Insert new nodes
@@ -207,7 +215,7 @@ def load_data():
             """
             db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type'], dataset_id))
 
-        return jsonify({'message': 'Data loaded successfully', 'dataset_id': dataset_id}), 200
+        return jsonify({'message': 'Data loaded successfully', 'dataset_id': dataset_id, 'dataset_name': dataset_name}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -276,6 +284,22 @@ def create_dataset():
         """, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type'], dataset_id))
     
     return jsonify({'message': 'Dataset created successfully', 'dataset_id': dataset_id})
+
+@app.route('/api/dataset/<int:dataset_id>', methods=['DELETE'])
+def delete_dataset(dataset_id):
+    try:
+        # Delete connections associated with the dataset
+        db.execute_query("DELETE FROM Connections WHERE dataset_id = %s", (dataset_id,))
+        
+        # Delete nodes associated with the dataset
+        db.execute_query("DELETE FROM Nodes WHERE dataset_id = %s", (dataset_id,))
+        
+        # Delete the dataset
+        db.execute_query("DELETE FROM Datasets WHERE id = %s", (dataset_id,))
+        
+        return jsonify({'message': 'Dataset deleted successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

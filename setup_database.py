@@ -3,7 +3,7 @@ from config import Config
 
 def setup_database():
     conn = psycopg2.connect(
-        dbname=Config.DB_NAME
+        dbname=Config.DB_NAME,  # Added missing comma here
         user=Config.DB_USER,
         password=Config.DB_PASSWORD,
         host=Config.DB_HOST

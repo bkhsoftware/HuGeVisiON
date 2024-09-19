@@ -89,6 +89,18 @@ Present dynamically updated, large and accurate trees of relations which can be 
 
 4. Adjust the visualization settings using the control panel on the right side of the screen.
 
+## Generating Datasets
+
+To generate the default dataset:
+
+python generate_test_data.py DEFAULT=true
+
+To generate a large test dataset:
+
+python generate_test_data.py
+
+You can customize the size of the test dataset by setting the TEST_NUM_NODES and TEST_NUM_CONNECTIONS environment variables.
+
 ## Project Structure
 
 HuGeVisiON

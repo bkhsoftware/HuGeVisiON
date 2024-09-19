@@ -70,7 +70,24 @@ def reset_database():
     )
     """)
 
-    print("Created tables in the database.")
+    cur.execute("""
+    CREATE TABLE Datasets (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL
+    )
+    """)
+
+    cur.execute("""
+    ALTER TABLE Nodes
+    ADD COLUMN dataset_id INTEGER REFERENCES Datasets(id)
+    """)
+
+    cur.execute("""
+    ALTER TABLE Connections
+    ADD COLUMN dataset_id INTEGER REFERENCES Datasets(id)
+    """)
+
+    print("Created Datasets table and updated Nodes and Connections tables.")
 
     # Close the connection
     cur.close()
