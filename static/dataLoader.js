@@ -55,6 +55,9 @@ export function loadDataset(datasetId) {
                 });
 
                 updateVisibleElements();
+
+                // Update dataset selector
+                updateDatasetSelector(datasetId);
             } else {
                 console.log(`Dataset ${datasetId} is empty or not found.`);
             }
@@ -63,6 +66,13 @@ export function loadDataset(datasetId) {
             console.error('Error loading dataset:', error);
             // Handle the error appropriately, maybe show a message to the user
         });
+}
+
+function updateDatasetSelector(datasetId) {
+    const datasetSelector = document.getElementById('datasetSelector');
+    if (datasetSelector) {
+        datasetSelector.value = datasetId;
+    }
 }
 
 function loadMostRecentDataset() {
@@ -101,7 +111,6 @@ export function loadNodesInView() {
     const currentDatasetId = getCurrentDatasetId();
     if (!currentDatasetId) {
         console.log("No dataset selected. Skipping node loading.");
-        clearExistingData();  // Clear the visualization when no dataset is selected
         return;
     }
 
@@ -151,7 +160,7 @@ export function loadNodesInView() {
         });
 }
 
-function getCurrentDatasetId() {
+export function getCurrentDatasetId() {
     const datasetSelector = document.getElementById('datasetSelector');
     return datasetSelector ? datasetSelector.value : null;
 }
@@ -162,10 +171,20 @@ export function loadConnections() {
         console.log("No valid node IDs to load connections for.");
         return;
     }
-    const url = `/api/connections?node_ids=${nodeIds.join(',')}&page=${currentPage}&per_page=${perPage}`;
+    const currentDatasetId = getCurrentDatasetId();
+    if (!currentDatasetId) {
+        console.log("No dataset selected. Skipping connection loading.");
+        return;
+    }
+    const url = `/api/connections?dataset_id=${currentDatasetId}&node_ids=${nodeIds.join(',')}&page=${currentPage}&per_page=${perPage}`;
 
     fetch(url)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             console.log(`Loaded ${data.connections.length} connections`);
             data.connections.forEach(connection => {

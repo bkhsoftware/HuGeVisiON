@@ -37,8 +37,22 @@ export function loadDataset(datasetId) {
         .then(response => response.json())
         .then(data => {
             clearExistingData();
-            loadNodesFromData(data.nodes);
-            loadConnectionsFromData(data.connections);
+            console.log("Raw data from server:", data);
+
+            // Use the genealogy mode to interpret the data
+            const genealogyMode = window.modeManager.getMode('Genealogy');
+            if (genealogyMode) {
+                console.log("Using genealogy mode to interpret data");
+                const interpretedData = genealogyMode.interpretData(data);
+                console.log("Interpreted data:", interpretedData);
+                loadNodesFromData(interpretedData.nodes);
+                loadConnectionsFromData(interpretedData.connections);
+            } else {
+                console.warn("Genealogy mode not found, using raw data");
+                loadNodesFromData(data.nodes);
+                loadConnectionsFromData(data.connections);
+            }
+
             updateVisibleElements();
             focusOnAllNodes();
             

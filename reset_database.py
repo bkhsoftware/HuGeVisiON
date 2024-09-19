@@ -2,6 +2,7 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from dotenv import load_dotenv
 import os
+import uuid 
 
 load_dotenv()
 
@@ -58,7 +59,7 @@ def reset_database():
 
     cur.execute("""
     CREATE TABLE Nodes (
-        id SERIAL PRIMARY KEY,
+        id VARCHAR(255) NOT NULL,
         dataset_id INTEGER REFERENCES Datasets(id),
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL,
@@ -67,20 +68,19 @@ def reset_database():
         z FLOAT NOT NULL,
         url VARCHAR(255),
         sex CHAR(1) NOT NULL DEFAULT 'U',
-        UNIQUE (id, dataset_id)
+        PRIMARY KEY (id, dataset_id)
     )
     """)
 
     cur.execute("""
     CREATE TABLE Connections (
         id SERIAL PRIMARY KEY,
-        from_node_id INTEGER NOT NULL,
-        to_node_id INTEGER NOT NULL,
+        from_node_id VARCHAR(255) NOT NULL,
+        to_node_id VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL,
         dataset_id INTEGER REFERENCES Datasets(id),
-        FOREIGN KEY (from_node_id) REFERENCES Nodes(id),
-        FOREIGN KEY (to_node_id) REFERENCES Nodes(id),
-        FOREIGN KEY (dataset_id) REFERENCES Datasets(id)
+        FOREIGN KEY (from_node_id, dataset_id) REFERENCES Nodes (id, dataset_id),
+        FOREIGN KEY (to_node_id, dataset_id) REFERENCES Nodes (id, dataset_id)
     )
     """)
 
@@ -97,17 +97,17 @@ def reset_database():
         ('Node 2', 'Default', 50, 50, 50),
         ('Node 3', 'Default', -50, -50, -50)
     ]
+    node_ids = []
     for name, node_type, x, y, z in default_nodes:
+        node_id = f"N{uuid.uuid4().hex[:8]}"  # Generate a unique string ID
         cur.execute("""
-            INSERT INTO Nodes (name, type, x, y, z, dataset_id) 
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-        """, (name, node_type, x, y, z, default_dataset_id))
-        print(f"Created node: {name}")
+            INSERT INTO Nodes (id, name, type, x, y, z, dataset_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """, (node_id, name, node_type, x, y, z, default_dataset_id))
+        node_ids.append(node_id)
+        print(f"Created node: {name} with ID: {node_id}")
 
     # Create some default connections
-    cur.execute("SELECT id FROM Nodes WHERE dataset_id = %s ORDER BY id", (default_dataset_id,))
-    node_ids = [row[0] for row in cur.fetchall()]
-
     default_connections = [
         (node_ids[0], node_ids[1], 'Default'),
         (node_ids[1], node_ids[2], 'Default'),

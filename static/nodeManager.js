@@ -28,7 +28,7 @@ export function addNode(node, addToScene = true) {
         shininess: 50
     });
     const sphere = new THREE.Mesh(geometry, material);
-    sphere.position.set(node.x, node.y, node.z);
+    sphere.position.set(node.x || 0, node.y || 0, node.z || 0);
     
     sphere.userData = node;
     
@@ -40,7 +40,6 @@ export function addNode(node, addToScene = true) {
         scene.add(sphere);
     }
     nodes[node.id] = sphere;
-    triggerSync();
     return sphere;
 }
 

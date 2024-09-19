@@ -1,5 +1,6 @@
 import { nodes } from './nodeManager.js';
 import { lines } from './connectionManager.js';
+import { getCurrentDatasetId } from './dataLoader.js';
 
 export function initDataSync() {
     // Set up periodic sync
@@ -7,12 +8,30 @@ export function initDataSync() {
 }
 
 function syncDataWithServer() {
-    const nodeData = nodes ? Object.values(nodes).map(node => node.userData) : [];
-    const connectionData = lines ? Object.values(lines).map(line => line.userData) : [];
+    const currentDatasetId = getCurrentDatasetId();
+    if (!currentDatasetId) {
+        console.log("No dataset selected. Skipping data sync.");
+        return Promise.resolve();
+    }
 
     const data = {
-        nodes: nodeData,
-        connections: connectionData
+        dataset_id: currentDatasetId,
+        nodes: Object.values(nodes).map(node => ({
+            id: node.userData.id,
+            name: node.userData.name,
+            type: node.userData.type,
+            x: node.position.x,
+            y: node.position.y,
+            z: node.position.z,
+            sex: node.userData.sex || 'U',
+            dataset_id: currentDatasetId
+        })),
+        connections: Object.values(lines).map(line => ({
+            from_node_id: line.userData.from_node_id,
+            to_node_id: line.userData.to_node_id,
+            type: line.userData.type,
+            dataset_id: currentDatasetId
+        }))
     };
 
     return fetch('/api/sync_data', {

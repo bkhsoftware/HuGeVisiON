@@ -3,6 +3,8 @@ load_dotenv()
 
 import os
 from flask import Flask, jsonify, request, render_template, send_file
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from database import Database
 from math import ceil
 from config import Config
@@ -20,6 +22,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = Config.SECRET_KEY
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 db = Database.get_instance()
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per minute"]
+)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -175,10 +183,15 @@ def update_node():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/connections')
+@limiter.limit("100/minute")
 def get_connections():
     try:
+        dataset_id = request.args.get('dataset_id')
+        if not dataset_id:
+            return jsonify({'error': 'No dataset_id provided'}), 400
+
         node_ids = request.args.get('node_ids', '').split(',')
-        node_ids = [int(id) for id in node_ids if id and id.lower() != 'undefined']
+        node_ids = [id for id in node_ids if id and id.lower() != 'undefined']
 
         if not node_ids:
             return jsonify({
@@ -218,6 +231,7 @@ def get_connections():
             'total_count': total_count
         })
     except Exception as e:
+        print(f"Error in get_connections: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/save_data', methods=['POST'])
@@ -268,22 +282,25 @@ def load_data():
 def sync_data():
     try:
         data = request.json
+        dataset_id = data.get('dataset_id')
+        if not dataset_id:
+            return jsonify({'error': 'No dataset_id provided'}), 400
         
         with db.get_cursor() as cur:
             # Sync nodes
             for node in data['nodes']:
                 cur.execute("""
-                    INSERT INTO Nodes (id, name, type, x, y, z, dataset_id)
-                    VALUES (%(id)s, %(name)s, %(type)s, %(x)s, %(y)s, %(z)s, %(dataset_id)s)
-                    ON CONFLICT (id) DO UPDATE
-                    SET name = EXCLUDED.name, type = EXCLUDED.type, x = EXCLUDED.x, y = EXCLUDED.y, z = EXCLUDED.z
+                    INSERT INTO Nodes (id, name, type, x, y, z, dataset_id, sex)
+                    VALUES (%(id)s, %(name)s, %(type)s, %(x)s, %(y)s, %(z)s, %(dataset_id)s, %(sex)s)
+                    ON CONFLICT (id, dataset_id) DO UPDATE
+                    SET name = EXCLUDED.name, type = EXCLUDED.type, x = EXCLUDED.x, y = EXCLUDED.y, z = EXCLUDED.z, sex = EXCLUDED.sex
                 """, node)
 
             # Sync connections
             for conn in data['connections']:
                 cur.execute("""
-                    INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id)
-                    VALUES (%(id)s, %(from_node_id)s, %(to_node_id)s, %(type)s, %(dataset_id)s)
+                    INSERT INTO Connections (from_node_id, to_node_id, type, dataset_id)
+                    VALUES (%(from_node_id)s, %(to_node_id)s, %(type)s, %(dataset_id)s)
                     ON CONFLICT (id) DO UPDATE
                     SET from_node_id = EXCLUDED.from_node_id, to_node_id = EXCLUDED.to_node_id, type = EXCLUDED.type
                 """, conn)
@@ -395,6 +412,7 @@ def upload_ged():
             return jsonify({
                 'message': 'File uploaded and processed successfully',
                 'dataset_id': dataset_id,
+                'dataset_name': dataset_name,
                 'nodes': nodes,
                 'connections': connections
             })
