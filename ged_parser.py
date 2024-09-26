@@ -81,10 +81,30 @@ class GEDParser:
             self.current_entity.setdefault('children', []).append(value.strip('@'))
         elif tag in ['FAMS', 'FAMC'] and self.current_entity['type'] == 'individual':
             self.current_entity.setdefault(tag, []).append(value.strip('@'))
+        elif tag == 'BIRT' and self.current_entity['type'] == 'individual':
+            self.current_entity['birth_event'] = True
 
     def process_level_2(self, parts):
-        # Add processing for level 2 tags if needed
-        pass
+        if not self.current_entity or self.current_entity['type'] != 'individual':
+            return
+
+        tag = parts[0]
+        value = ' '.join(parts[1:])
+
+        if tag == 'DATE' and self.current_entity.get('birth_event'):
+            birth_year = self.extract_year(value)
+            if birth_year:
+                self.current_entity['birthYear'] = birth_year
+            self.current_entity['birth_event'] = False
+
+    def extract_year(self, date_string):
+        parts = date_string.split()
+        for part in reversed(parts):
+            if part.isdigit() and len(part) == 4:
+                print(f"Extracted year: {part}")  # Add this debug line
+                return int(part)
+        print(f"Failed to extract year from: {date_string}")  # Add this debug line
+        return None
 
     def create_connections(self):
         for family_id, family in self.families.items():
@@ -110,7 +130,9 @@ class GEDParser:
                 'name': individual.get('name', 'Unknown'),
                 'type': 'Person',
                 'sex': individual.get('sex', 'U'),
+                'birthYear': individual.get('birthYear'),
             } for individual_id, individual in self.individuals.items()
         ]
-
+        print(f"Generated {len(nodes)} nodes")  # Add this debug line
+        print(f"Sample node: {nodes[0] if nodes else 'No nodes'}")  # Add this debug line
         return {'nodes': nodes, 'connections': self.connections}

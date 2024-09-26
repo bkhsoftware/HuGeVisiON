@@ -158,80 +158,160 @@ export const genealogyMode = {
         console.log(`Bounding box: X(${minX}, ${maxX}), Y(${minY}, ${maxY}), Z(${minZ}, ${maxZ})`);
     },
     layoutNodesAsTree: function(nodes, connections) {
-        console.log("Starting layoutNodesAsTree");
+        console.log("Starting improved layoutNodesAsTree");
         console.log("Input nodes:", nodes);
         console.log("Input connections:", connections);
 
-        const nodeMap = new Map(nodes.map(node => [node.id, { ...node, children: [], parents: [], spouses: [] }]));
+        const LEVEL_SPACING = 100;  // Vertical spacing between generations
+        const NODE_SPACING = 50;    // Horizontal spacing between siblings
+        const TREE_SPACING = 50;   // Horizontal spacing between separate family trees
+        const SPOUSE_SPACING = 30;  // Horizontal spacing between spouses
 
-        // Build the tree structure
-        connections.forEach(conn => {
-            if (conn.type === 'Parent-Child') {
-                const parent = nodeMap.get(conn.from_node_id);
-                const child = nodeMap.get(conn.to_node_id);
-                if (parent && child) {
-                    parent.children.push(child);
-                    child.parents.push(parent);
+        // Helper function to build node map and relationships
+        function buildNodeMap(nodes, connections) {
+            const nodeMap = new Map(nodes.map(node => [node.id, { ...node, children: [], parents: [], spouses: [], level: 0, x: 0, y: 0, z: 0 }]));
+            
+            connections.forEach(conn => {
+                if (conn.type === 'Parent-Child') {
+                    const parent = nodeMap.get(conn.from_node_id);
+                    const child = nodeMap.get(conn.to_node_id);
+                    if (parent && child) {
+                        parent.children.push(child);
+                        child.parents.push(parent);
+                    }
+                } else if (conn.type === 'Spouse') {
+                    const spouse1 = nodeMap.get(conn.from_node_id);
+                    const spouse2 = nodeMap.get(conn.to_node_id);
+                    if (spouse1 && spouse2) {
+                        spouse1.spouses.push(spouse2);
+                        spouse2.spouses.push(spouse1);
+                    }
                 }
-            } else if (conn.type === 'Spouse') {
-                const spouse1 = nodeMap.get(conn.from_node_id);
-                const spouse2 = nodeMap.get(conn.to_node_id);
-                if (spouse1 && spouse2) {
-                    spouse1.spouses.push(spouse2);
-                    spouse2.spouses.push(spouse1);
-                }
-            }
-        });
+            });
 
-        // Find root nodes (nodes without parents)
-        const rootNodes = Array.from(nodeMap.values()).filter(node => node.parents.length === 0);
-        console.log(`Found ${rootNodes.length} root nodes:`, rootNodes);
-
-        // If there are no root nodes, treat all nodes as roots
-        if (rootNodes.length === 0) {
-            rootNodes.push(...nodeMap.values());
-            console.log("No root nodes found, using all nodes as roots");
+            return nodeMap;
         }
 
-        const scaleFactor = 1;
-        const levelSpacing = 100;  // Increased vertical spacing
-        const siblingSpacing = 50;
-        const spouseSpacing = 30;
-        const treeSpacing = 100;
+        // Helper function to find and sort root nodes
+        function findAndSortRootNodes(nodeMap) {
+            const rootNodes = Array.from(nodeMap.values()).filter(node => node.parents.length === 0);
+            console.log("Root nodes before sorting:", rootNodes);  // Add this debug line
+            const sortedRootNodes = rootNodes.sort((a, b) => (a.birthYear || 0) - (b.birthYear || 0));
+            console.log("Root nodes after sorting:", sortedRootNodes);  // Add this debug line
+            return sortedRootNodes;
+        }
 
-        function setPositions(node, x, y, z, level, visited = new Set()) {
+        // Helper function to assign levels (generations)
+        function assignLevels(node, level = 0, visited = new Set()) {
             if (visited.has(node.id)) return;
             visited.add(node.id);
+            
+            node.level = Math.max(node.level, level);
+            node.children.forEach(child => assignLevels(child, level + 1, visited));
+            node.spouses.forEach(spouse => assignLevels(spouse, level, visited));
+        }
 
-            node.x = x * scaleFactor;
-            node.y = -y * scaleFactor; // Invert y-axis for top-down tree
-            node.z = z * scaleFactor;
+        // Helper function to calculate vertical positions
+        function calculateVerticalPositions(nodeMap) {
+            const levelMap = new Map();
+            nodeMap.forEach(node => {
+                if (!levelMap.has(node.level)) {
+                    levelMap.set(node.level, []);
+                }
+                levelMap.get(node.level).push(node);
+            });
 
-            console.log(`Set position for node ${node.id}: (${node.x}, ${node.y}, ${node.z})`);
+            levelMap.forEach((nodesInLevel, level) => {
+                console.log(`Calculating vertical positions for level ${level}`);  // Add this debug line
+                console.log("Nodes in level before sorting:", nodesInLevel);  // Add this debug line
+                nodesInLevel.sort((a, b) => (a.birthYear || 0) - (b.birthYear || 0));
+                console.log("Nodes in level after sorting:", nodesInLevel);  // Add this debug line
+                nodesInLevel.forEach((node, index) => {
+                    node.y = -level * LEVEL_SPACING - index * (LEVEL_SPACING / (nodesInLevel.length + 1));
+                    console.log(`Node ${node.id} positioned at y=${node.y}`);  // Add this debug line
+                });
+            });
+        }
+
+        // Helper function to layout a family tree
+        function layoutFamilyTree(node, xOffset = 0, visited = new Set()) {
+            if (visited.has(node.id)) return 0;
+            visited.add(node.id);
+
+            let totalWidth = NODE_SPACING;
 
             // Position children
             if (node.children.length > 0) {
-                const totalWidth = (node.children.length - 1) * siblingSpacing;
-                const startX = x - totalWidth / 2;
-                node.children.forEach((child, index) => {
-                    setPositions(child, startX + index * siblingSpacing, y + levelSpacing, z, level + 1, visited);
-                });
+                const childrenWidth = node.children.reduce((sum, child) => 
+                    sum + layoutFamilyTree(child, xOffset + totalWidth, visited), 0);
+                totalWidth += childrenWidth;
             }
+
+            // Position node
+            node.x = xOffset + totalWidth / 2;
 
             // Position spouses
             node.spouses.forEach((spouse, index) => {
                 if (!visited.has(spouse.id)) {
-                    setPositions(spouse, x + (index + 1) * spouseSpacing, y, z, level, visited);
+                    spouse.x = node.x + (index + 1) * SPOUSE_SPACING;
+                    spouse.y = node.y;
+                    visited.add(spouse.id);
+                }
+            });
+
+            return Math.max(totalWidth, NODE_SPACING);
+        }
+
+        // Helper function to handle spouse relationships
+        function handleSpouseRelationships(nodeMap) {
+            nodeMap.forEach(node => {
+                if (node.spouses.length > 0) {
+                    const averageX = node.spouses.reduce((sum, spouse) => sum + spouse.x, node.x) / (node.spouses.length + 1);
+                    node.x = averageX;
+                    node.spouses.forEach(spouse => {
+                        spouse.x = averageX;
+                    });
                 }
             });
         }
 
-        // Layout each tree
+        // Helper function for final layout adjustments
+        function finalLayoutAdjustments(nodeMap) {
+            // Implement collision detection and resolution if needed
+            // This is a placeholder for potential future improvements
+        }
+
+        // Main layout logic
+        const nodeMap = buildNodeMap(nodes, connections);
+        const rootNodes = findAndSortRootNodes(nodeMap);
+
+        rootNodes.forEach(root => assignLevels(root));
+        calculateVerticalPositions(nodeMap);
+
+        let xOffset = 0;
         rootNodes.forEach((root, index) => {
-            setPositions(root, index * treeSpacing, 0, 0, 0, new Set());
+            const treeWidth = layoutFamilyTree(root, xOffset);
+            xOffset += treeWidth + TREE_SPACING;
         });
 
-        // Return the updated nodes
+        handleSpouseRelationships(nodeMap);
+        finalLayoutAdjustments(nodeMap);
+
+        // Adjust vertical positions of family trees based on root node years
+        const minRootYear = Math.min(...rootNodes.map(root => root.birthYear || Infinity));
+        const yearSpacing = LEVEL_SPACING / 2; // Adjust this value to control vertical spacing between trees
+        rootNodes.forEach(root => {
+            const verticalOffset = ((root.birthYear || minRootYear) - minRootYear) * yearSpacing;
+            const adjustNodes = (node, visited = new Set()) => {
+                if (visited.has(node.id)) return;
+                visited.add(node.id);
+                node.y -= verticalOffset;
+                node.children.forEach(child => adjustNodes(child, visited));
+                node.spouses.forEach(spouse => adjustNodes(spouse, visited));
+            };
+            adjustNodes(root);
+        });
+
         const layoutedNodes = Array.from(nodeMap.values());
         console.log("Laid out nodes:", layoutedNodes);
         return layoutedNodes;
