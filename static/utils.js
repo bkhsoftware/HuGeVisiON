@@ -27,45 +27,15 @@ export function getColorForConnectionType(type) {
 }
 
 export function updateVisibleElements() {
-    const position = camera.position;
-    
-    // Sort nodes by distance to camera
-    const sortedNodes = Object.values(nodes).sort((a, b) => 
-        a.position.distanceTo(position) - b.position.distanceTo(position)
-    );
-    
-    // Update node visibility
-    let visibleNodeCount = 0;
-    sortedNodes.forEach(node => {
-        const distance = node.position.distanceTo(position);
-        const shouldBeVisible = distance <= RENDER_DISTANCE && visibleNodeCount < MAX_VISIBLE_NODES;
-        
-        if (shouldBeVisible && !scene.getObjectById(node.id)) {
+    Object.values(nodes).forEach(node => {
+        if (!scene.getObjectById(node.id)) {
             scene.add(node);
-            visibleNodeCount++;
-        } else if (!shouldBeVisible && scene.getObjectById(node.id)) {
-            scene.remove(node);
         }
-        
-        node.visible = shouldBeVisible;
     });
-    
-    // Update connection visibility
-    let visibleConnectionCount = 0;
+
     Object.values(lines).forEach(line => {
-        if (line && line.userData) {
-            const startNode = nodes[line.userData.from_node_id];
-            const endNode = nodes[line.userData.to_node_id];
-            const shouldBeVisible = startNode && endNode && startNode.visible && endNode.visible && visibleConnectionCount < MAX_VISIBLE_CONNECTIONS;
-            
-            if (shouldBeVisible && !scene.getObjectById(line.id)) {
-                scene.add(line);
-                visibleConnectionCount++;
-            } else if (!shouldBeVisible && scene.getObjectById(line.id)) {
-                scene.remove(line);
-            }
-            
-            line.visible = shouldBeVisible;
+        if (!scene.getObjectById(line.id)) {
+            scene.add(line);
         }
     });
 }

@@ -66,6 +66,10 @@ export function setMode(modeName) {
     }
 }
 
+export function getCurrentMode() {
+    return currentMode;
+}
+
 export function initPluginSystem() {
     // This is where you'd load your different mode plugins
     // For now, we'll just log that it's ready

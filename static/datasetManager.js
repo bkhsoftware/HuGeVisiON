@@ -3,6 +3,7 @@ import { nodes, addNode, setPinnedNode } from './nodeManager.js';
 import { lines, loadedConnections, addConnection } from './connectionManager.js';
 import { updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
+import { getCurrentMode } from './modeManager.js';
 
 export function initDatasetManager() {
     const datasetSelector = document.getElementById('datasetSelector');
@@ -40,15 +41,15 @@ export function loadDataset(datasetId) {
             console.log("Raw data from server:", data);
 
             // Use the genealogy mode to interpret the data
-            const genealogyMode = window.modeManager.getMode('Genealogy');
-            if (genealogyMode) {
-                console.log("Using genealogy mode to interpret data");
-                const interpretedData = genealogyMode.interpretData(data);
+            const currentMode = getCurrentMode();
+            if (currentMode && currentMode.name === 'Genealogy') {
+                console.log("Using current mode to interpret data");
+                const interpretedData = currentMode.interpretData(data);
                 console.log("Interpreted data:", interpretedData);
                 loadNodesFromData(interpretedData.nodes);
                 loadConnectionsFromData(interpretedData.connections);
             } else {
-                console.warn("Genealogy mode not found, using raw data");
+                console.warn("Appropriate mode not found or not active, using raw data");
                 loadNodesFromData(data.nodes);
                 loadConnectionsFromData(data.connections);
             }

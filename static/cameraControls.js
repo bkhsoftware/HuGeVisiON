@@ -48,10 +48,10 @@ export function focusOnAllNodes() {
     const fov = camera.fov * (Math.PI / 180);
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
 
-    // Add some padding
-    cameraZ *= 1.5;
+    // Add more padding to see a larger area
+    cameraZ *= 2.5;
 
-    camera.position.set(center.x, center.y, center.z + cameraZ);
+    camera.position.set(center.x, center.y + size.y / 2, center.z + cameraZ);
     camera.lookAt(center);
     camera.updateProjectionMatrix();
 

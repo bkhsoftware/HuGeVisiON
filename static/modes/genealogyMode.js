@@ -13,15 +13,19 @@ export const genealogyMode = {
         console.log('Deactivating Genealogy Mode');
         this.removeUploadForm();
     },
-    interpretData: function() {
+    interpretData: function(data) {
         console.log("Interpreting data for genealogy visualization");
-        if (!this.data || !this.data.nodes || this.data.nodes.length === 0) {
+        if (!data || !data.nodes || data.nodes.length === 0) {
             console.log("No data available for genealogy mode");
             return { nodes: [], connections: [] };
         }
-        this.printTreeStructure(this.data.nodes, this.data.connections);
-        const layoutedNodes = this.layoutNodesAsTree(this.data.nodes, this.data.connections);
-        return { nodes: layoutedNodes, connections: this.data.connections };
+        console.log("Raw data:", data);
+        
+        // Implement the tree layout logic here
+        const layoutedNodes = this.layoutNodesAsTree(data.nodes, data.connections);
+        
+        console.log("Laid out nodes:", layoutedNodes);
+        return { nodes: layoutedNodes, connections: data.connections };
     },
     customizeVisuals: function(scene, nodes, connections) {
         Object.values(nodes).forEach(node => {
@@ -158,7 +162,7 @@ export const genealogyMode = {
         console.log("Input nodes:", nodes);
         console.log("Input connections:", connections);
 
-        const nodeMap = new Map(nodes.map(node => [node.id, { ...node, children: [], parents: [] }]));
+        const nodeMap = new Map(nodes.map(node => [node.id, { ...node, children: [], parents: [], spouses: [] }]));
 
         // Build the tree structure
         connections.forEach(conn => {
@@ -168,6 +172,13 @@ export const genealogyMode = {
                 if (parent && child) {
                     parent.children.push(child);
                     child.parents.push(parent);
+                }
+            } else if (conn.type === 'Spouse') {
+                const spouse1 = nodeMap.get(conn.from_node_id);
+                const spouse2 = nodeMap.get(conn.to_node_id);
+                if (spouse1 && spouse2) {
+                    spouse1.spouses.push(spouse2);
+                    spouse2.spouses.push(spouse1);
                 }
             }
         });
@@ -182,72 +193,48 @@ export const genealogyMode = {
             console.log("No root nodes found, using all nodes as roots");
         }
 
-        // Recursively set positions
-        function setPositions(node, x, y, level, maxWidth, visited = new Set()) {
-            if (visited.has(node.id)) {
-                console.warn(`Cycle detected at node ${node.id}`);
-                return;
-            }
+        const scaleFactor = 1;
+        const levelSpacing = 100;  // Increased vertical spacing
+        const siblingSpacing = 50;
+        const spouseSpacing = 30;
+        const treeSpacing = 100;
+
+        function setPositions(node, x, y, z, level, visited = new Set()) {
+            if (visited.has(node.id)) return;
             visited.add(node.id);
 
-            node.x = x;
-            node.y = y;
-            node.z = 0;
-            console.log(`Set position for node ${node.id}: (${x}, ${y}, 0)`);
+            node.x = x * scaleFactor;
+            node.y = -y * scaleFactor; // Invert y-axis for top-down tree
+            node.z = z * scaleFactor;
 
-            const levelSpacing = 500;
-            const childSpacing = node.children.length > 0 ? maxWidth / (node.children.length + 1) : 250;
+            console.log(`Set position for node ${node.id}: (${node.x}, ${node.y}, ${node.z})`);
 
-            let totalWidth = (node.children.length - 1) * childSpacing;
-            let startX = x - totalWidth / 2;
+            // Position children
+            if (node.children.length > 0) {
+                const totalWidth = (node.children.length - 1) * siblingSpacing;
+                const startX = x - totalWidth / 2;
+                node.children.forEach((child, index) => {
+                    setPositions(child, startX + index * siblingSpacing, y + levelSpacing, z, level + 1, visited);
+                });
+            }
 
-            node.children.forEach((child, index) => {
-                setPositions(child, startX + (index + 1) * childSpacing, y + levelSpacing, level + 1, childSpacing, visited);
+            // Position spouses
+            node.spouses.forEach((spouse, index) => {
+                if (!visited.has(spouse.id)) {
+                    setPositions(spouse, x + (index + 1) * spouseSpacing, y, z, level, visited);
+                }
             });
         }
 
         // Layout each tree
-        const treeSpacing = 2000;
         rootNodes.forEach((root, index) => {
-            console.log(`Laying out tree for root node ${root.id}`);
-            setPositions(root, index * treeSpacing, 0, 0, treeSpacing);
+            setPositions(root, index * treeSpacing, 0, 0, 0, new Set());
         });
 
         // Return the updated nodes
         const layoutedNodes = Array.from(nodeMap.values());
         console.log("Laid out nodes:", layoutedNodes);
         return layoutedNodes;
-    },
-    logNodePositions: function(nodes) {
-        console.log("Node positions:");
-        nodes.forEach(node => {
-            console.log(`Node ${node.id}: (${node.x}, ${node.y}, ${node.z})`);
-        });
-    },
-    logNodePositions: function(nodes) {
-        console.log("Node positions:");
-        nodes.forEach(node => {
-            console.log(`Node ${node.id}: (${node.x}, ${node.y}, ${node.z})`);
-        });
-    },
-    printTreeStructure: function(nodes, connections) {
-        const nodeMap = new Map(nodes.map(node => [node.id, { ...node, children: [], parents: [] }]));
-
-        connections.forEach(conn => {
-            const parent = nodeMap.get(conn.from_node_id);
-            const child = nodeMap.get(conn.to_node_id);
-            if (parent && child) {
-                parent.children.push(child.id);
-                child.parents.push(parent.id);
-            }
-        });
-
-        console.log("Tree Structure:");
-        nodeMap.forEach((node, id) => {
-            console.log(`Node ${id} (${node.name}):`);
-            console.log(`  Parents: ${node.parents.join(', ')}`);
-            console.log(`  Children: ${node.children.join(', ')}`);
-        });
     }
 };
 

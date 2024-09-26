@@ -21,6 +21,7 @@ export function initUIManager() {
     initLabelToggle();
     initDatasetManager();
     initDeleteDatasetButton();
+    initViewButtons();
 }
 
 function initControls() {
@@ -398,3 +399,42 @@ function initDeleteDatasetButton() {
     deleteDatasetButton.addEventListener('click', deleteCurrentDataset);
 }
 
+function initViewButtons() {
+    const controlsDiv = document.getElementById('controls');
+    
+    const focusRootButton = document.createElement('button');
+    focusRootButton.textContent = 'Focus on Roots';
+    focusRootButton.onclick = focusOnRootNodes;
+    controlsDiv.appendChild(focusRootButton);
+
+    const showAllButton = document.createElement('button');
+    showAllButton.textContent = 'Show All';
+    showAllButton.onclick = focusOnAllNodes;
+    controlsDiv.appendChild(showAllButton);
+}
+
+function focusOnRootNodes() {
+    const rootNodes = Object.values(nodes).filter(node => node.userData.parents.length === 0);
+    if (rootNodes.length === 0) return;
+
+    const box = new THREE.Box3();
+    rootNodes.forEach(node => box.expandByObject(node));
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+
+    cameraZ *= 1.5;
+
+    camera.position.set(center.x, center.y, center.z + cameraZ);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+
+    if (controls) {
+        controls.target.copy(center);
+        controls.update();
+    }
+}
