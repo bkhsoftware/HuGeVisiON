@@ -95,3 +95,30 @@ export function addNewConnection(fromNodeId, toNodeId, type = "Default") {
     triggerSync();
     return connectionObject;
 }
+
+export function updateNodeConnections(nodeId, newPosition) {
+    Object.values(lines).forEach(line => {
+        if (line.userData.from_node_id === nodeId || line.userData.to_node_id === nodeId) {
+            const startNode = nodes[line.userData.from_node_id];
+            const endNode = nodes[line.userData.to_node_id];
+            
+            if (startNode && endNode) {
+                // Update the existing line geometry
+                const positions = line.geometry.attributes.position.array;
+                
+                if (line.userData.from_node_id === nodeId) {
+                    positions[0] = newPosition.x;
+                    positions[1] = newPosition.y;
+                    positions[2] = newPosition.z;
+                } else {
+                    positions[3] = newPosition.x;
+                    positions[4] = newPosition.y;
+                    positions[5] = newPosition.z;
+                }
+
+                line.geometry.attributes.position.needsUpdate = true;
+                line.geometry.computeBoundingSphere();
+            }
+        }
+    });
+}

@@ -1,6 +1,6 @@
 import { scene, camera } from './core.js';
 import { nodes, addNode, addNewNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
-import { lines, loadedConnections, addConnection, addNewConnection } from './connectionManager.js';
+import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
 import { initDatasetManager, loadDataset, deleteCurrentDataset } from './datasetManager.js';
@@ -194,13 +194,21 @@ function editNodeInfo(nodeId) {
     const nodeData = node.userData;
     infoPanel.innerHTML = `
         <h3>Edit Node</h3>
+        <label for="nodeName">Name:</label>
         <input id="nodeName" value="${nodeData.name}">
+        <label for="nodeType">Type:</label>
         <select id="nodeType">
             <option value="Person" ${nodeData.type === 'Person' ? 'selected' : ''}>Person</option>
             <option value="Organization" ${nodeData.type === 'Organization' ? 'selected' : ''}>Organization</option>
             <option value="Place" ${nodeData.type === 'Place' ? 'selected' : ''}>Place</option>
             <option value="Concept" ${nodeData.type === 'Concept' ? 'selected' : ''}>Concept</option>
         </select>
+        <label for="nodeX">X:</label>
+        <input type="number" id="nodeX" value="${nodeData.x.toFixed(2)}">
+        <label for="nodeY">Y:</label>
+        <input type="number" id="nodeY" value="${nodeData.y.toFixed(2)}">
+        <label for="nodeZ">Z:</label>
+        <input type="number" id="nodeZ" value="${nodeData.z.toFixed(2)}">
         <button id="saveNodeButton">Save</button>
     `;
     
@@ -214,13 +222,25 @@ export function saveNodeInfo(nodeId) {
     const node = nodes[nodeId];
     const newName = document.getElementById('nodeName').value;
     const newType = document.getElementById('nodeType').value;
+    const newX = parseFloat(document.getElementById('nodeX').value);
+    const newY = parseFloat(document.getElementById('nodeY').value);
+    const newZ = parseFloat(document.getElementById('nodeZ').value);
 
     // Update node data
     node.userData.name = newName;
     node.userData.type = newType;
+    node.userData.x = newX;
+    node.userData.y = newY;
+    node.userData.z = newZ;
 
     // Update node appearance
     node.material.color.setHex(getColorForType(newType));
+
+    // Update node position
+    node.position.set(newX, newY, newZ);
+
+    // Update connections
+    updateNodeConnections(nodeId, { x: newX, y: newY, z: newZ });
 
     // Send update to server
     fetch('/api/update_node', {
@@ -232,6 +252,9 @@ export function saveNodeInfo(nodeId) {
             id: nodeId,
             name: newName,
             type: newType,
+            x: newX,
+            y: newY,
+            z: newZ,
         }),
     })
     .then(response => response.json())
@@ -241,6 +264,11 @@ export function saveNodeInfo(nodeId) {
             showNodeInfo(node);
         } else {
             hideInfoPanelWithDelay();
+        }
+        // Remove this line: updateVisibleElements();
+        // Instead, just re-render the scene
+        if (window.renderer && window.camera) {
+            window.renderer.render(scene, window.camera);
         }
     })
     .catch((error) => {

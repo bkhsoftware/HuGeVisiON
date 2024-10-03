@@ -1,4 +1,4 @@
-import { scene } from './core.js';
+import { scene, initializeSceneLights } from './core.js';
 import { nodes, addNode, setPinnedNode } from './nodeManager.js';
 import { lines, loadedConnections, addConnection } from './connectionManager.js';
 import { updateVisibleElements } from './utils.js';
@@ -121,13 +121,32 @@ export async function clearExistingData() {
     // Reset any pinned or hovered nodes
     setPinnedNode(null);
 
-    // Update the scene
-    updateVisibleElements();
-    
     // Force a render to clear any remaining visuals
-    if (window.renderer) {
+    if (window.renderer && window.camera) {
         window.renderer.render(scene, window.camera);
     }
+
+    // Dispose of geometries and materials
+    scene.traverse((object) => {
+        if (object.geometry) {
+            object.geometry.dispose();
+        }
+        if (object.material) {
+            if (Array.isArray(object.material)) {
+                object.material.forEach(material => material.dispose());
+            } else {
+                object.material.dispose();
+            }
+        }
+    });
+
+    // Clear the scene
+    while(scene.children.length > 0) { 
+        scene.remove(scene.children[0]); 
+    }
+
+    // Re-add essential scene elements (like lights)
+    initializeSceneLights();
 }
 
 function loadNodesFromData(nodesData) {

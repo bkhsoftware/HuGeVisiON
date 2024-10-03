@@ -35,14 +35,7 @@ export function initCore() {
         console.log('OrbitControls test complete');
     }
 
-    // Add ambient light to the scene
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-
-    // Add directional light to the scene
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    directionalLight.position.set(0, 1, 0);
-    scene.add(directionalLight);
+    initializeSceneLights();
 
     renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
     renderer.domElement.addEventListener('click', checkNodeClick);
@@ -66,6 +59,15 @@ export function initOrbitControls() {
     } catch (error) {
         console.error('Error initializing OrbitControls:', error);
     }
+}
+
+export function initializeSceneLights() {
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    directionalLight.position.set(0, 1, 0);
+    scene.add(directionalLight);
 }
 
 export function animate() {

@@ -166,14 +166,17 @@ def update_node():
         node_id = data['id']
         new_name = data['name']
         new_type = data['type']
+        new_x = data['x']
+        new_y = data['y']
+        new_z = data['z']
 
         query = """
         UPDATE Nodes
-        SET name = %s, type = %s
+        SET name = %s, type = %s, x = %s, y = %s, z = %s
         WHERE id = %s
         RETURNING *
         """
-        result = db.execute_query(query, (new_name, new_type, node_id))
+        result = db.execute_query(query, (new_name, new_type, new_x, new_y, new_z, node_id))
 
         if result:
             return jsonify(result[0]), 200
