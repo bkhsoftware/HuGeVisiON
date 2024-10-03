@@ -63,3 +63,35 @@ export function clearConnections() {
     lines = {};
     loadedConnections.clear();
 }
+
+
+/**
+ * Adds a new connection between two nodes.
+ * This function is now called internally by the UI manager when the user
+ * completes the two-step node selection process in connection mode.
+ * 
+ * @param {string} fromNodeId - The ID of the source node
+ * @param {string} toNodeId - The ID of the target node
+ * @param {string} type - The type of connection (default: "Default")
+ * @returns {Object} The created connection object
+ */
+export function addNewConnection(fromNodeId, toNodeId, type = "Default") {
+    const newConnection = {
+        id: Date.now().toString(),
+        from_node_id: fromNodeId,
+        to_node_id: toNodeId,
+        type: type
+    };
+    
+    const connectionObject = addConnection(newConnection, true);
+    
+    // Highlight the new connection temporarily
+    const originalColor = connectionObject.material.color.getHex();
+    connectionObject.material.color.setHex(0xff0000); // Set to red
+    setTimeout(() => {
+        connectionObject.material.color.setHex(originalColor);
+    }, 1000); // Change back after 1 second
+    
+    triggerSync();
+    return connectionObject;
+}

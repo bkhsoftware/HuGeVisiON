@@ -421,5 +421,15 @@ def upload_ged():
         print(f"Error in upload_ged: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/connection_ids', methods=['GET'])
+def get_connection_ids():
+    try:
+        db = Database.get_instance()
+        connection_ids = db.execute_query("SELECT id FROM Connections")
+        return jsonify([conn['id'] for conn in connection_ids])
+    except Exception as e:
+        print(f"Error fetching connection IDs: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

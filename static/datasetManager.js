@@ -5,6 +5,8 @@ import { updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
 import { getCurrentMode } from './modeManager.js';
 
+let currentDatasetId = null;
+
 export function initDatasetManager() {
     const datasetSelector = document.getElementById('datasetSelector');
     if (datasetSelector) {
@@ -33,6 +35,8 @@ function handleDatasetChange(event) {
 
 export function loadDataset(datasetId) {
     if (!datasetId) return;
+
+    currentDatasetId = datasetId;
 
     fetch(`/api/dataset/${datasetId}`)
         .then(response => response.json())
@@ -66,16 +70,16 @@ export function loadDataset(datasetId) {
         .catch(error => console.error('Error loading dataset:', error));
 }
 
-function fetchDatasets() {
-    fetch('/api/datasets')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(datasets => {
-            const datasetSelector = document.getElementById('datasetSelector');
+export async function fetchDatasets() {
+    try {
+        const response = await fetch('/api/datasets');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const datasets = await response.json();
+        
+        const datasetSelector = document.getElementById('datasetSelector');
+        if (datasetSelector) {
             datasetSelector.innerHTML = '<option value="">Select a dataset</option>';
             if (Array.isArray(datasets) && datasets.length > 0) {
                 datasets.forEach(dataset => {
@@ -86,20 +90,21 @@ function fetchDatasets() {
                 });
             } else {
                 console.log("No datasets available");
-                // Optionally, add a disabled option to indicate no datasets
                 const option = document.createElement('option');
                 option.disabled = true;
                 option.textContent = "No datasets available";
                 datasetSelector.appendChild(option);
             }
-        })
-        .catch(error => {
-            console.error('Error fetching datasets:', error);
-            // Handle the error, maybe show a message to the user
-        });
+        }
+        
+        return datasets;  // Return the datasets array
+    } catch (error) {
+        console.error('Error fetching datasets:', error);
+        throw error;
+    }
 }
 
-function clearExistingData() {
+export async function clearExistingData() {
     // Clear nodes
     Object.values(nodes).forEach(node => {
         scene.remove(node);
@@ -118,6 +123,11 @@ function clearExistingData() {
 
     // Update the scene
     updateVisibleElements();
+    
+    // Force a render to clear any remaining visuals
+    if (window.renderer) {
+        window.renderer.render(scene, window.camera);
+    }
 }
 
 function loadNodesFromData(nodesData) {
@@ -169,5 +179,46 @@ export function deleteCurrentDataset() {
     .catch(error => {
         console.error('Error deleting dataset:', error);
         // Handle the error, maybe show a message to the user
+    });
+}
+
+export function deleteDatasetById(datasetId) {
+    fetch(`/api/dataset/${datasetId}`, {
+        method: 'DELETE',
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Dataset deleted:', data);
+        
+        // Remove the dataset from the selector
+        const datasetSelector = document.getElementById('datasetSelector');
+        if (datasetSelector) {
+            const option = datasetSelector.querySelector(`option[value="${datasetId}"]`);
+            if (option) {
+                option.remove();
+            }
+            // Reset the selector to "Select a dataset"
+            datasetSelector.value = "";
+        }
+
+        // Clear the visualization if the deleted dataset was the current one
+        if (currentDatasetId === datasetId) {
+            clearExistingData();
+            currentDatasetId = null;
+        }
+
+        // Refresh the dataset list
+        fetchDatasets();
+
+        alert(`Dataset ${datasetId} has been deleted successfully.`);
+    })
+    .catch(error => {
+        console.error('Error deleting dataset:', error);
+        alert(`Error deleting dataset: ${error.message}`);
     });
 }

@@ -2,7 +2,7 @@ import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
 
 import { updateCamera } from './cameraControls.js';
-import { checkNodeHover, updateLabels } from './nodeManager.js';
+import { checkNodeClick, checkNodeHover, updateLabels } from './nodeManager.js';
 import { loadNodesInView } from './dataLoader.js';
 
 export let controls;
@@ -45,6 +45,7 @@ export function initCore() {
     scene.add(directionalLight);
 
     renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    renderer.domElement.addEventListener('click', checkNodeClick);
 
     loadNodesInView();
 }
@@ -75,5 +76,8 @@ export function animate() {
     updateLabels();
     renderer.render(scene, camera);
 }
+
+window.renderer = renderer;
+window.camera = camera;
 
 //window.addEventListener('resize', onWindowResize);

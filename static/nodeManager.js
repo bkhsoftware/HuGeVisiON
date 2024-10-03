@@ -3,6 +3,7 @@ import { getColorForType } from './utils.js';
 import * as THREE from './lib/three.module.js';
 import { infoPanel, hideInfoPanelWithDelay, showNodeInfo, showInfoPanelWithDelay } from './uiManager.js';
 import { triggerSync } from './dataSync.js';
+import { handleNodeClick } from './uiManager.js';
 
 export let nodes = {};
 const MAX_NODES = 1000;
@@ -31,6 +32,11 @@ export function addNode(node, addToScene = true) {
     sphere.position.set(node.x || 0, node.y || 0, node.z || 0);
     
     sphere.userData = node;
+
+    sphere.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handleNodeClick(sphere);
+    });
     
     // Create label
     const label = createLabel(node.name);
@@ -148,5 +154,30 @@ export function checkNodeHover() {
 
 export function setPinnedNode(node) {
     pinnedNode = node;
+}
+
+export function addNewNode(x, y, z, name = "New Node", type = "Concept") {
+    const newNode = {
+        id: Date.now().toString(), // Use timestamp as a simple unique ID
+        name: name,
+        type: type,
+        x: x,
+        y: y,
+        z: z
+    };
+    
+    const nodeObject = addNode(newNode, true);
+    triggerSync();
+    return nodeObject;
+}
+
+export function checkNodeClick(event) {
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(Object.values(nodes));
+    
+    if (intersects.length > 0) {
+        const clickedNode = intersects[0].object;
+        handleNodeClick(clickedNode);
+    }
 }
 

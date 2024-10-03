@@ -1,11 +1,13 @@
 import { scene, camera } from './core.js';
-import { nodes, addNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
-import { lines, loadedConnections, addConnection } from './connectionManager.js';
+import { nodes, addNode, addNewNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
+import { lines, loadedConnections, addConnection, addNewConnection } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
 import { initDatasetManager, loadDataset, deleteCurrentDataset } from './datasetManager.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
 import * as THREE from './lib/three.module.js';
+import { clearExistingData, fetchDatasets as fetchDatasetsFromManager, deleteDatasetById } from './datasetManager.js';
+
 
 export let infoPanel;
 let infoPanelTimeout;
@@ -13,6 +15,8 @@ let infoPanelHideTimeout;
 const SHOW_DELAY = 300;
 const HIDE_DELAY = 800;
 let hoveredNode = null;
+let isConnectionMode = false;
+let firstSelectedNode = null;
 
 export function initUIManager() {
     createInfoPanel();
@@ -20,8 +24,7 @@ export function initUIManager() {
     initSaveLoadButtons();
     initLabelToggle();
     initDatasetManager();
-    initDeleteDatasetButton();
-    initViewButtons();
+    addDeleteDatasetButton(); 
 }
 
 function initControls() {
@@ -57,6 +60,37 @@ function initControls() {
     document.getElementById('maxConnectionsValue').textContent = MAX_CONNECTIONS;
     document.getElementById('maxNodesValue').textContent = MAX_NODES;
     document.getElementById('renderDistanceValue').textContent = RENDER_DISTANCE;
+
+    const buttonRow = document.createElement('div');
+    buttonRow.style.marginTop = '10px';
+    document.getElementById('controls').appendChild(buttonRow);
+
+    const addNodeButton = document.createElement('button');
+    addNodeButton.textContent = 'Add Node';
+    addNodeButton.addEventListener('click', () => {
+        const x = Math.random() * 100 - 50;
+        const y = Math.random() * 100 - 50;
+        const z = Math.random() * 100 - 50;
+        const newNode = addNewNode(x, y, z);
+        showNodeInfo(newNode);
+    });
+    buttonRow.appendChild(addNodeButton);
+
+    const addConnectionButton = document.createElement('button');
+    addConnectionButton.textContent = 'Create Connection';
+    addConnectionButton.dataset.action = 'create-connection';  // Add this line
+    addConnectionButton.addEventListener('click', toggleConnectionMode);
+    buttonRow.appendChild(addConnectionButton);
+
+    const focusRootButton = document.createElement('button');
+    focusRootButton.textContent = 'Focus on Roots';
+    focusRootButton.onclick = focusOnRootNodes;
+    buttonRow.appendChild(focusRootButton);
+
+    const showAllButton = document.createElement('button');
+    showAllButton.textContent = 'Show All';
+    showAllButton.onclick = focusOnAllNodes;
+    buttonRow.appendChild(showAllButton);
 }
 
 function initSaveLoadButtons() {
@@ -135,14 +169,14 @@ export function showNodeInfo(node) {
 }
 
 export function togglePinNode(node) {
-    const pinButton = document.getElementById('pinButton');
+    const pinButton = document.getElementById('pinNodeButton');
     if (pinButton) {
         if (pinnedNode === node) {
-            pinnedNode = null;
+            setPinnedNode(null);
             pinButton.textContent = 'Pin';
             hideInfoPanelWithDelay();
         } else {
-            pinnedNode = node;
+            setPinnedNode(node);
             pinButton.textContent = 'Unpin';
             showNodeInfo(node);
         }
@@ -338,13 +372,13 @@ function saveDataToFile() {
     URL.revokeObjectURL(url);
 }
 
-function loadDataFromFile(event) {
+async function loadDataFromFile(event) {
     const file = event.target.files[0];
     if (file) {
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             try {
-                const data = JSON.parse(e.target.result);
+                let data = JSON.parse(e.target.result);
                 
                 // Prompt the user for a dataset name
                 const defaultName = file.name.replace(/\.[^/.]+$/, ""); // Remove file extension
@@ -357,60 +391,69 @@ function loadDataFromFile(event) {
 
                 // Add the dataset name to the data object
                 data.name = datasetName;
+
+                // Fetch existing connection IDs
+                let existingIds = [];
+                try {
+                    const existingIdsResponse = await fetch('/api/connection_ids');
+                    if (!existingIdsResponse.ok) {
+                        throw new Error(`Failed to fetch existing connection IDs: ${existingIdsResponse.statusText}`);
+                    }
+                    existingIds = await existingIdsResponse.json();
+                } catch (error) {
+                    console.warn("Failed to fetch existing connection IDs. Proceeding with import anyway.", error);
+                }
+
+                // Generate new unique IDs for connections
+                if (data.connections) {
+                    let maxId = Math.max(...existingIds, ...data.connections.map(c => parseInt(c.id) || 0), 0);
+                    data.connections = data.connections.map(connection => ({
+                        ...connection,
+                        id: ++maxId
+                    }));
+                }
                 
                 // Send data to server to create a new dataset
-                fetch('/api/load_data', {
+                const response = await fetch('/api/load_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(data),
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(result => {
-                    if (result.error) {
-                        throw new Error(result.error);
-                    }
-                    console.log('Dataset created:', result);
-                    clearExistingData();
-                    loadDataset(result.dataset_id);
-                    fetchDatasets();  // Refresh the dataset list
-                })
-                .catch(error => {
-                    console.error('Error creating dataset:', error);
-                    alert(`Error creating dataset: ${error.message}`);
                 });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('Dataset created:', result);
+                await clearExistingData();
+                await loadDataset(result.dataset_id);
+                const updatedDatasets = await fetchDatasetsFromManager();  // Refresh the dataset list
+                
+                // Update the dataset selector
+                const datasetSelector = document.getElementById('datasetSelector');
+                if (datasetSelector) {
+                    datasetSelector.innerHTML = '<option value="">Select a dataset</option>';
+                    updatedDatasets.forEach(dataset => {
+                        const option = document.createElement('option');
+                        option.value = dataset.id;
+                        option.textContent = dataset.name;
+                        datasetSelector.appendChild(option);
+                    });
+                    datasetSelector.value = result.dataset_id;
+                }
+
+                alert(`Dataset "${datasetName}" has been successfully created and loaded.`);
             } catch (error) {
-                console.error('Error parsing JSON:', error);
-                alert(`Error parsing JSON: ${error.message}`);
+                console.error('Error creating dataset:', error);
+                alert(`Error creating dataset: ${error.message}`);
             }
         };
         reader.readAsText(file);
     }
-}
-
-function initDeleteDatasetButton() {
-    const deleteDatasetButton = document.getElementById('deleteDatasetButton');
-    deleteDatasetButton.addEventListener('click', deleteCurrentDataset);
-}
-
-function initViewButtons() {
-    const controlsDiv = document.getElementById('controls');
-    
-    const focusRootButton = document.createElement('button');
-    focusRootButton.textContent = 'Focus on Roots';
-    focusRootButton.onclick = focusOnRootNodes;
-    controlsDiv.appendChild(focusRootButton);
-
-    const showAllButton = document.createElement('button');
-    showAllButton.textContent = 'Show All';
-    showAllButton.onclick = focusOnAllNodes;
-    controlsDiv.appendChild(showAllButton);
 }
 
 function focusOnRootNodes() {
@@ -436,5 +479,123 @@ function focusOnRootNodes() {
     if (controls) {
         controls.target.copy(center);
         controls.update();
+    }
+}
+
+function toggleConnectionMode() {
+    isConnectionMode = !isConnectionMode;
+    const addConnectionButton = document.querySelector('button[data-action="create-connection"]');
+    if (isConnectionMode) {
+        addConnectionButton.textContent = 'Cancel Connection';
+        addConnectionButton.style.backgroundColor = 'red';
+        document.body.style.cursor = 'crosshair';
+    } else {
+        addConnectionButton.textContent = 'Create Connection';
+        addConnectionButton.style.backgroundColor = '';
+        document.body.style.cursor = 'default';
+        firstSelectedNode = null;
+    }
+}
+
+export function handleNodeClick(node) {
+    if (isConnectionMode) {
+        if (!firstSelectedNode) {
+            firstSelectedNode = node;
+            node.material.emissive.setHex(0xff0000); // Highlight first selected node
+        } else if (node !== firstSelectedNode) {
+            addNewConnection(firstSelectedNode.userData.id, node.userData.id);
+            firstSelectedNode.material.emissive.setHex(0x000000); // Remove highlight
+            firstSelectedNode = null;
+            toggleConnectionMode(); // Exit connection mode
+        }
+    } else {
+        showNodeInfo(node);
+    }
+}
+
+async function createDeleteDatasetDialog() {
+    const dialog = document.createElement('dialog');
+    dialog.innerHTML = `
+        <form method="dialog">
+            <h2>Delete Dataset</h2>
+            <label for="deleteDatasetSelect">Select Dataset:</label>
+            <select id="deleteDatasetSelect" required>
+                <option value="">Loading datasets...</option>
+            </select>
+            <div class="button-group">
+                <button type="submit" value="delete">Delete</button>
+                <button type="button" value="cancel">Cancel</button>
+            </div>
+        </form>
+    `;
+    document.body.appendChild(dialog);
+
+    const selectElement = dialog.querySelector('#deleteDatasetSelect');
+    const form = dialog.querySelector('form');
+    const cancelButton = dialog.querySelector('button[value="cancel"]');
+
+    // Fetch datasets immediately when creating the dialog
+    try {
+        const datasets = await fetchDatasetsFromManager();
+        if (datasets && datasets.length > 0) {
+            selectElement.innerHTML = '<option value="">Select a dataset to delete</option>' + 
+                datasets.map(dataset => 
+                    `<option value="${dataset.id}">${dataset.name} (ID: ${dataset.id})</option>`
+                ).join('');
+        } else {
+            selectElement.innerHTML = '<option value="">No datasets available</option>';
+        }
+    } catch (error) {
+        console.error('Error fetching datasets:', error);
+        selectElement.innerHTML = '<option value="">Error loading datasets</option>';
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const datasetId = selectElement.value;
+        if (datasetId && confirm(`Are you sure you want to delete the selected dataset?`)) {
+            await deleteDatasetById(datasetId);
+            dialog.close();
+            
+            // Refresh the datasets in the dialog
+            const updatedDatasets = await fetchDatasetsFromManager();
+            if (updatedDatasets && updatedDatasets.length > 0) {
+                selectElement.innerHTML = '<option value="">Select a dataset to delete</option>' + 
+                    updatedDatasets.map(dataset => 
+                        `<option value="${dataset.id}">${dataset.name} (ID: ${dataset.id})</option>`
+                    ).join('');
+            } else {
+                selectElement.innerHTML = '<option value="">No datasets available</option>';
+            }
+        }
+    });
+
+    cancelButton.addEventListener('click', () => {
+        dialog.close();
+    });
+
+    return dialog;
+}
+
+function addDeleteDatasetButton() {
+    const controlsDiv = document.getElementById('controls');
+    
+    const deleteButton = document.createElement('button');
+    deleteButton.textContent = 'Delete Dataset';
+    deleteButton.onclick = async () => {
+        const dialog = await createDeleteDatasetDialog();
+        dialog.showModal();
+    };
+    
+    controlsDiv.appendChild(deleteButton);
+}
+
+async function fetchDatasets() {
+    try {
+        const datasets = await fetchDatasetsFromManager();
+        return datasets;
+    } catch (error) {
+        console.error('Error fetching datasets:', error);
+        throw error;
     }
 }
