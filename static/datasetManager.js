@@ -12,15 +12,16 @@ export function initDatasetManager() {
     if (datasetSelector) {
         datasetSelector.addEventListener('change', handleDatasetChange);
         fetchDatasets();
+
+        // Add the new delete button
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Delete Dataset';
+        deleteButton.onclick = handleDeleteDatasetClick;
+        
+        // Insert the delete button before the dataset selector
+        datasetSelector.parentNode.insertBefore(deleteButton, datasetSelector);
     } else {
         console.warn("Dataset selector element not found");
-    }
-
-    const deleteDatasetButton = document.getElementById('deleteDatasetButton');
-    if (deleteDatasetButton) {
-        deleteDatasetButton.addEventListener('click', deleteCurrentDataset);
-    } else {
-        console.warn("Delete dataset button not found");
     }
 }
 
@@ -161,46 +162,6 @@ function loadConnectionsFromData(connectionsData) {
     });
 }
 
-export function deleteCurrentDataset() {
-    const datasetSelector = document.getElementById('datasetSelector');
-    const currentDatasetId = datasetSelector.value;
-
-    if (!currentDatasetId) {
-        console.log('No dataset selected');
-        return;
-    }
-
-    fetch(`/api/dataset/${currentDatasetId}`, {
-        method: 'DELETE',
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(result => {
-        console.log('Dataset deleted:', result);
-        // Remove the deleted dataset from the selector
-        const option = datasetSelector.querySelector(`option[value="${currentDatasetId}"]`);
-        if (option) {
-            option.remove();
-        }
-        // Reset the selector to "Select a dataset"
-        datasetSelector.value = "";
-        // Clear the visualization
-        clearExistingData();
-        // Update the dataset list
-        fetchDatasets();
-        // Optionally, show a message to the user
-        console.log("Dataset deleted successfully. Select another dataset to view.");
-    })
-    .catch(error => {
-        console.error('Error deleting dataset:', error);
-        // Handle the error, maybe show a message to the user
-    });
-}
-
 export function deleteDatasetById(datasetId) {
     fetch(`/api/dataset/${datasetId}`, {
         method: 'DELETE',
@@ -240,4 +201,77 @@ export function deleteDatasetById(datasetId) {
         console.error('Error deleting dataset:', error);
         alert(`Error deleting dataset: ${error.message}`);
     });
+}
+
+async function handleDeleteDatasetClick() {
+    const datasetSelector = document.getElementById('datasetSelector');
+    const currentDatasetId = datasetSelector.value;
+
+    if (currentDatasetId) {
+        // A dataset is currently selected, delete it directly
+        if (confirm(`Are you sure you want to delete the selected dataset?`)) {
+            await deleteDatasetById(currentDatasetId);
+            datasetSelector.value = "";  // Reset the selector
+            await clearExistingData();   // Clear the visualization
+            await fetchDatasets();  // Refresh the dataset list
+        }
+    } else {
+        // No dataset is selected, open the modal to choose a dataset to delete
+        const dialog = await createDeleteDatasetDialog();
+        dialog.showModal();
+    }
+}
+
+async function createDeleteDatasetDialog() {
+    const dialog = document.createElement('dialog');
+    dialog.innerHTML = `
+        <form method="dialog">
+            <h2>Delete Dataset</h2>
+            <label for="deleteDatasetSelect">Select Dataset:</label>
+            <select id="deleteDatasetSelect" required>
+                <option value="">Loading datasets...</option>
+            </select>
+            <div class="button-group">
+                <button type="submit" value="delete">Delete</button>
+                <button type="button" value="cancel">Cancel</button>
+            </div>
+        </form>
+    `;
+    document.body.appendChild(dialog);
+
+    const selectElement = dialog.querySelector('#deleteDatasetSelect');
+    const form = dialog.querySelector('form');
+    const cancelButton = dialog.querySelector('button[value="cancel"]');
+
+    // Fetch datasets immediately when creating the dialog
+    try {
+        const datasets = await fetchDatasets();
+        if (datasets && datasets.length > 0) {
+            selectElement.innerHTML = '<option value="">Select a dataset to delete</option>' + 
+                datasets.map(dataset => 
+                    `<option value="${dataset.id}">${dataset.name} (ID: ${dataset.id})</option>`
+                ).join('');
+        } else {
+            selectElement.innerHTML = '<option value="">No datasets available</option>';
+        }
+    } catch (error) {
+        console.error('Error fetching datasets:', error);
+        selectElement.innerHTML = '<option value="">Error loading datasets</option>';
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const datasetId = selectElement.value;
+        if (datasetId && confirm(`Are you sure you want to delete the selected dataset?`)) {
+            await deleteDatasetById(datasetId);
+            dialog.close();
+            await fetchDatasets();  // Refresh the dataset list
+        }
+    });
+
+    cancelButton.addEventListener('click', () => {
+        dialog.close();
+    });
+
+    return dialog;
 }

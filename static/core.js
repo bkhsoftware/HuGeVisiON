@@ -4,6 +4,7 @@ import { OrbitControls } from './lib/OrbitControls.js';
 import { updateCamera } from './cameraControls.js';
 import { checkNodeClick, checkNodeHover, updateLabels } from './nodeManager.js';
 import { loadNodesInView } from './dataLoader.js';
+import { loadDataset } from './datasetManager.js';
 
 export let controls;
 export let mouse;
@@ -68,6 +69,30 @@ export function initializeSceneLights() {
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
     directionalLight.position.set(0, 1, 0);
     scene.add(directionalLight);
+}
+
+export function refreshScene(currentDatasetId) {
+    // Store current camera position and rotation
+    const cameraPosition = camera.position.clone();
+    const cameraRotation = camera.rotation.clone();
+
+    // Clear the existing scene
+    while(scene.children.length > 0) { 
+        scene.remove(scene.children[0]); 
+    }
+
+    // Reinitialize scene (lights, etc.)
+    initializeSceneLights();
+
+    // Reload the current dataset
+    loadDataset(currentDatasetId);
+
+    // Restore camera position and rotation
+    camera.position.copy(cameraPosition);
+    camera.rotation.copy(cameraRotation);
+
+    // Force a render
+    renderer.render(scene, camera);
 }
 
 export function animate() {

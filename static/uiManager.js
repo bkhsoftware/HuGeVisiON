@@ -1,12 +1,11 @@
-import { scene, camera } from './core.js';
+import { scene, camera, refreshScene } from './core.js';
 import { nodes, addNode, addNewNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
 import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
-import { initDatasetManager, loadDataset, deleteCurrentDataset } from './datasetManager.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
 import * as THREE from './lib/three.module.js';
-import { clearExistingData, fetchDatasets as fetchDatasetsFromManager, deleteDatasetById } from './datasetManager.js';
+import { clearExistingData, fetchDatasets as fetchDatasetsFromManager, loadDataset } from './datasetManager.js';
 
 
 export let infoPanel;
@@ -23,8 +22,6 @@ export function initUIManager() {
     initControls();
     initSaveLoadButtons();
     initLabelToggle();
-    initDatasetManager();
-    addDeleteDatasetButton(); 
 }
 
 function initControls() {
@@ -233,15 +230,6 @@ export function saveNodeInfo(nodeId) {
     node.userData.y = newY;
     node.userData.z = newZ;
 
-    // Update node appearance
-    node.material.color.setHex(getColorForType(newType));
-
-    // Update node position
-    node.position.set(newX, newY, newZ);
-
-    // Update connections
-    updateNodeConnections(nodeId, { x: newX, y: newY, z: newZ });
-
     // Send update to server
     fetch('/api/update_node', {
         method: 'POST',
@@ -260,22 +248,19 @@ export function saveNodeInfo(nodeId) {
     .then(response => response.json())
     .then(data => {
         console.log('Node updated successfully:', data);
+        
+        // Refresh the scene
+        refreshScene(data.dataset_id);
+
         if (pinnedNode && pinnedNode.userData.id === nodeId) {
-            showNodeInfo(node);
+            showNodeInfo(nodes[nodeId]);  // Use the new node object after refresh
         } else {
             hideInfoPanelWithDelay();
-        }
-        // Remove this line: updateVisibleElements();
-        // Instead, just re-render the scene
-        if (window.renderer && window.camera) {
-            window.renderer.render(scene, window.camera);
         }
     })
     .catch((error) => {
         console.error('Error updating node:', error);
     });
-    
-    positionInfoPanelAtNode(node);
 }
 
 export function positionInfoPanelAtNode(node) {
@@ -485,8 +470,14 @@ async function loadDataFromFile(event) {
 }
 
 function focusOnRootNodes() {
-    const rootNodes = Object.values(nodes).filter(node => node.userData.parents.length === 0);
-    if (rootNodes.length === 0) return;
+    const rootNodes = Object.values(nodes).filter(node => {
+        return node && node.userData && Array.isArray(node.userData.parents) && node.userData.parents.length === 0;
+    });
+
+    if (rootNodes.length === 0) {
+        console.log("No root nodes found.");
+        return;
+    }
 
     const box = new THREE.Box3();
     rootNodes.forEach(node => box.expandByObject(node));
@@ -541,83 +532,6 @@ export function handleNodeClick(node) {
     }
 }
 
-async function createDeleteDatasetDialog() {
-    const dialog = document.createElement('dialog');
-    dialog.innerHTML = `
-        <form method="dialog">
-            <h2>Delete Dataset</h2>
-            <label for="deleteDatasetSelect">Select Dataset:</label>
-            <select id="deleteDatasetSelect" required>
-                <option value="">Loading datasets...</option>
-            </select>
-            <div class="button-group">
-                <button type="submit" value="delete">Delete</button>
-                <button type="button" value="cancel">Cancel</button>
-            </div>
-        </form>
-    `;
-    document.body.appendChild(dialog);
-
-    const selectElement = dialog.querySelector('#deleteDatasetSelect');
-    const form = dialog.querySelector('form');
-    const cancelButton = dialog.querySelector('button[value="cancel"]');
-
-    // Fetch datasets immediately when creating the dialog
-    try {
-        const datasets = await fetchDatasetsFromManager();
-        if (datasets && datasets.length > 0) {
-            selectElement.innerHTML = '<option value="">Select a dataset to delete</option>' + 
-                datasets.map(dataset => 
-                    `<option value="${dataset.id}">${dataset.name} (ID: ${dataset.id})</option>`
-                ).join('');
-        } else {
-            selectElement.innerHTML = '<option value="">No datasets available</option>';
-        }
-    } catch (error) {
-        console.error('Error fetching datasets:', error);
-        selectElement.innerHTML = '<option value="">Error loading datasets</option>';
-    }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const datasetId = selectElement.value;
-        if (datasetId && confirm(`Are you sure you want to delete the selected dataset?`)) {
-            await deleteDatasetById(datasetId);
-            dialog.close();
-            
-            // Refresh the datasets in the dialog
-            const updatedDatasets = await fetchDatasetsFromManager();
-            if (updatedDatasets && updatedDatasets.length > 0) {
-                selectElement.innerHTML = '<option value="">Select a dataset to delete</option>' + 
-                    updatedDatasets.map(dataset => 
-                        `<option value="${dataset.id}">${dataset.name} (ID: ${dataset.id})</option>`
-                    ).join('');
-            } else {
-                selectElement.innerHTML = '<option value="">No datasets available</option>';
-            }
-        }
-    });
-
-    cancelButton.addEventListener('click', () => {
-        dialog.close();
-    });
-
-    return dialog;
-}
-
-function addDeleteDatasetButton() {
-    const controlsDiv = document.getElementById('controls');
-    
-    const deleteButton = document.createElement('button');
-    deleteButton.textContent = 'Delete Dataset';
-    deleteButton.onclick = async () => {
-        const dialog = await createDeleteDatasetDialog();
-        dialog.showModal();
-    };
-    
-    controlsDiv.appendChild(deleteButton);
-}
-
 async function fetchDatasets() {
     try {
         const datasets = await fetchDatasetsFromManager();
@@ -627,3 +541,4 @@ async function fetchDatasets() {
         throw error;
     }
 }
+
