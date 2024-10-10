@@ -97,14 +97,26 @@ export function refreshScene(currentDatasetId) {
 
 export function animate() {
     requestAnimationFrame(animate);
-    controls.update();
-    updateCamera();
-    checkNodeHover();
-    updateLabels();
-    renderer.render(scene, camera);
+    try {
+      controls.update();
+      updateCamera();
+      checkNodeHover();
+      updateLabels();
+      renderer.render(scene, camera);
+    } catch (error) {
+        console.error("Error in animation loop:", error);
+        console.error("Error stack:", error.stack);
+        console.error("Current state:", {
+            nodes: Object.keys(nodes).length,
+            lines: Object.keys(lines).length,
+            connectionLabels: Object.keys(connectionLabels).length
+        });
+    }
 }
 
 window.renderer = renderer;
 window.camera = camera;
+
+export { THREE };
 
 //window.addEventListener('resize', onWindowResize);

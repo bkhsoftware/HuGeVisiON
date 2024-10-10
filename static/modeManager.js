@@ -2,6 +2,7 @@ import { scene } from './core.js';
 import { getNodes, addNode, clearNodes } from './nodeManager.js';
 import { getLines, addConnection, loadedConnections, clearConnections } from './connectionManager.js';
 import { genealogyMode } from './modes/genealogyMode.js';
+import { AIKnowledgeBaseMode } from './modes/AIKnowledgeBaseMode.js';
 import { loadDataset } from './dataLoader.js';
 
 const plugins = {};
@@ -11,7 +12,8 @@ const modes = {};
 export function initModeManager() {
     registerMode('No Mode', { name: 'No Mode', activate: () => {}, deactivate: () => {} });
     registerMode('Genealogy', genealogyMode);
-    
+    registerMode('AI Knowledge Base', AIKnowledgeBaseMode);
+
     const modeSelect = document.getElementById('modeSelect');
     if (modeSelect) {
         modeSelect.addEventListener('change', (e) => {
@@ -31,7 +33,7 @@ export function registerMode(name, modeImplementation) {
     if (modeSelect) {
         const option = document.createElement('option');
         option.value = name;
-        option.textContent = name;
+        option.textContent = modeImplementation.name || name;
         modeSelect.appendChild(option);
     }
 }
@@ -66,6 +68,17 @@ export function setMode(modeName) {
     }
 }
 
+export function setModeBasedOnDataType(dataType) {
+    switch(dataType) {
+        case "AIKnowledgeBase":
+            setMode("AI Knowledge Base");
+            break;
+        // Add more cases for other data types
+        default:
+            setMode("No Mode");
+    }
+}
+
 export function getCurrentMode() {
     return currentMode;
 }
@@ -83,10 +96,9 @@ export function updateVisualization() {
     const nodes = getNodes();
     const lines = getLines();
 
-    // Load data through the current mode's data interpreter if available
     let data;
     if (currentMode && currentMode.interpretData) {
-        data = currentMode.interpretData();
+        data = currentMode.interpretData({ nodes: Object.values(nodes), connections: Object.values(lines) });
     } else {
         data = { 
             nodes: Object.values(nodes), 
@@ -96,21 +108,25 @@ export function updateVisualization() {
 
     console.log("Data for visualization:", data);
 
-    // Create nodes and connections based on the interpreted data
     if (data.nodes && Array.isArray(data.nodes)) {
-        data.nodes.forEach(node => {
-            console.log("Adding node:", node);
-            addNode(node);
+        data.nodes.forEach(nodeData => {
+            console.log("Adding node:", nodeData);
+            const node = addNode(nodeData);
+            if (currentMode && currentMode.customizeNode) {
+                currentMode.customizeNode(node, nodeData);
+            }
         });
     }
     if (data.connections && Array.isArray(data.connections)) {
-        data.connections.forEach(conn => {
-            console.log("Adding connection:", conn);
-            addConnection(conn);
+        data.connections.forEach(connData => {
+            console.log("Adding connection:", connData);
+            const connection = addConnection(connData);
+            if (currentMode && currentMode.customizeConnection) {
+                currentMode.customizeConnection(connection, connData);
+            }
         });
     }
 
-    // Apply mode-specific visual customizations if available
     if (currentMode && currentMode.customizeVisuals) {
         currentMode.customizeVisuals(scene, nodes, lines);
     }

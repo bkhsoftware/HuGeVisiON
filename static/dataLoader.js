@@ -5,6 +5,7 @@ import { camera } from './core.js';
 import { updateVisibleElements } from './utils.js';
 import { scene } from './core.js';
 import { lines } from './connectionManager.js';
+import { setModeBasedOnDataType } from './modeManager.js';
 
 let currentPage = 1;
 const perPage = 100;
@@ -19,6 +20,14 @@ const FETCH_COOLDOWN = 5000;
 export function initDataLoader() {
     // Don't load any dataset by default
     console.log("Data loader initialized. No dataset loaded by default.");
+}
+
+export function detectDataType(data) {
+    if (data.type && data.type === "AIKnowledgeBase") {
+        return "AIKnowledgeBase";
+    }
+    // Add more conditions here for other types of data
+    return "Default";
 }
 
 export function loadDataset(datasetId) {
@@ -40,6 +49,10 @@ export function loadDataset(datasetId) {
         .then(data => {
             if (data.nodes && data.connections) {
                 console.log(`Loading dataset ${datasetId} with ${data.nodes.length} nodes and ${data.connections.length} connections`);
+                
+                // Detect data type and set mode
+                const dataType = detectDataType(data);
+                setModeBasedOnDataType(dataType);
                 
                 // Clear existing data
                 clearNodes();
@@ -67,7 +80,6 @@ export function loadDataset(datasetId) {
             // Handle the error appropriately, maybe show a message to the user
         });
 }
-
 function updateDatasetSelector(datasetId) {
     const datasetSelector = document.getElementById('datasetSelector');
     if (datasetSelector) {
@@ -110,7 +122,7 @@ function loadMostRecentDataset() {
 export function loadNodesInView() {
     const currentDatasetId = getCurrentDatasetId();
     if (!currentDatasetId) {
-        console.log("No dataset selected. Skipping node loading.");
+        /*console.log("No dataset selected. Skipping node loading.");*/
         return;
     }
 

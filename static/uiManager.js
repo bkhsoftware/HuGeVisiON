@@ -1,6 +1,6 @@
 import { scene, camera, refreshScene } from './core.js';
 import { nodes, addNode, addNewNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
-import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections } from './connectionManager.js';
+import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections, toggleConnectionLabels } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
@@ -88,6 +88,11 @@ function initControls() {
     showAllButton.textContent = 'Show All';
     showAllButton.onclick = focusOnAllNodes;
     buttonRow.appendChild(showAllButton);
+
+    const toggleLabelsButton = document.createElement('button');
+    toggleLabelsButton.textContent = 'Toggle Connection Labels';
+    toggleLabelsButton.onclick = toggleConnectionLabels;
+    buttonRow.appendChild(toggleLabelsButton);
 }
 
 function initSaveLoadButtons() {

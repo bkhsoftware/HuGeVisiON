@@ -257,25 +257,35 @@ def load_data():
     try:
         data = request.json
         
-        # Use the provided name or generate a default one
         dataset_name = data.get('name', f"Imported Dataset {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         dataset_id = db.execute_query("INSERT INTO Datasets (name) VALUES (%s) RETURNING id", (dataset_name,))[0]['id']
 
-        # Insert new nodes
         for node in data['nodes']:
             query = """
-            INSERT INTO Nodes (id, name, type, x, y, z, dataset_id) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO Nodes (id, name, type, x, y, z, dataset_id, subtype, importance, confidence, description) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            db.execute_query(query, (node['id'], node['name'], node['type'], node['x'], node['y'], node['z'], dataset_id))
+            db.execute_query(query, (
+                node['id'], node['name'], node['type'], 
+                node.get('x', 0), node.get('y', 0), node.get('z', 0), 
+                dataset_id,
+                node.get('subtype'),
+                node.get('importance'),
+                node.get('confidence'),
+                node.get('description')
+            ))
 
-        # Insert new connections
         for conn in data['connections']:
             query = """
-            INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id) 
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO Connections (id, from_node_id, to_node_id, type, dataset_id, strength, confidence) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
-            db.execute_query(query, (conn['id'], conn['from_node_id'], conn['to_node_id'], conn['type'], dataset_id))
+            db.execute_query(query, (
+                conn['id'], conn['from_node_id'], conn['to_node_id'], 
+                conn['type'], dataset_id,
+                conn.get('strength'),
+                conn.get('confidence')
+            ))
 
         return jsonify({'message': 'Data loaded successfully', 'dataset_id': dataset_id, 'dataset_name': dataset_name}), 200
     except Exception as e:

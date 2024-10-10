@@ -4,6 +4,7 @@ import * as THREE from './lib/three.module.js';
 import { infoPanel, hideInfoPanelWithDelay, showNodeInfo, showInfoPanelWithDelay } from './uiManager.js';
 import { triggerSync } from './dataSync.js';
 import { handleNodeClick } from './uiManager.js';
+import { updateConnectionLabels } from './connectionManager.js';
 
 export let nodes = {};
 const MAX_NODES = 1000;
@@ -64,40 +65,23 @@ export function addNodeToScene(nodeId) {
 
 function createLabel(text) {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;  // Fixed width
-    canvas.height = 128; // Fixed height
+    canvas.width = 512;
+    canvas.height = 128;
     
     const context = canvas.getContext('2d');
     context.font = 'Bold 64px Arial';
     context.fillStyle = 'rgba(255,255,255,0.95)';
     context.textBaseline = 'middle';
-    
-    // Measure text width
-    const metrics = context.measureText(text);
-    const textWidth = metrics.width;
-    
-    // Calculate scaling factor if text is too wide
-    const maxWidth = canvas.width - 20; // Leave some padding
-    const scale = Math.min(1, maxWidth / textWidth);
-    
-    // Scale context if necessary
-    if (scale < 1) {
-        context.save();
-        context.scale(scale, 1);
-    }
+    context.textAlign = 'center';
     
     // Draw text
-    context.fillText(text, 10 / scale, canvas.height / 2);
-    
-    if (scale < 1) {
-        context.restore();
-    }
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
     
     const texture = new THREE.CanvasTexture(canvas);
     const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(spriteMaterial);
     
-    sprite.scale.set(40, 10, 1); // Fixed scale
+    sprite.scale.set(30, 7.5, 1); // Adjusted scale to match connection labels
     sprite.position.set(0, 10, 0);
     
     return sprite;
@@ -110,14 +94,17 @@ export function updateLabels() {
             label.visible = showLabels;
             if (showLabels) {
                 const distance = camera.position.distanceTo(node.position);
-                const scale = Math.max(1, 20 / Math.sqrt(distance));
-                label.scale.set(40 * scale, 10 * scale, 1);
+                const scale = Math.max(1, 15 / Math.sqrt(distance));
+                label.scale.set(30 * scale, 7.5 * scale, 1);
                 
                 // Make label always face the camera
                 label.quaternion.copy(camera.quaternion);
             }
         }
     });
+    
+    // Update connection labels as well
+    updateConnectionLabels();
 }
 
 export function setShowLabels(show) {

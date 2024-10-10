@@ -7,6 +7,8 @@ import { triggerSync } from './dataSync.js';
 
 export let lines = {};
 export let loadedConnections = new Set();
+let connectionLabels = {};
+let isConnectionLabelsVisible = true;
 
 export function initConnectionManager() {
     // ... (existing connection-related initialization)
@@ -14,6 +16,33 @@ export function initConnectionManager() {
 
 export function getLines() {
     return lines;
+}
+
+export function updateConnectionLabels() {
+    Object.entries(connectionLabels).forEach(([id, label]) => {
+        if (!label) {
+            console.warn(`Label for connection ${id} is undefined`);
+            return;
+        }
+        if (!label.position) {
+            console.warn(`Label for connection ${id} has no position property`);
+            return;
+        }
+        if (!label.visible) {
+            return; // Skip invisible labels
+        }
+        
+        try {
+            const distance = camera.position.distanceTo(label.position);
+            const scale = Math.max(1, 15 / Math.sqrt(distance));
+            label.scale.set(30 * scale, 7.5 * scale, 1);
+            
+            // Make label always face the camera
+            label.quaternion.copy(camera.quaternion);
+        } catch (error) {
+            console.error(`Error updating label for connection ${id}:`, error);
+        }
+    });
 }
 
 export function addConnection(connection, addToScene = true) {
@@ -34,7 +63,7 @@ export function addConnection(connection, addToScene = true) {
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
         color: getColorForConnectionType(connection.type),
-        linewidth: 3, // Increased from default 1
+        linewidth: 3,
         opacity: 0.8,
         transparent: true
     });
@@ -46,35 +75,55 @@ export function addConnection(connection, addToScene = true) {
     }
     lines[connection.id] = line;
     loadedConnections.add(connection.id);
+
+    // Add label
+    const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    const label = createTextSprite(connection.type);
+    label.position.copy(midpoint);
+    label.visible = isConnectionLabelsVisible;
+    if (addToScene) {
+        scene.add(label);
+    }
+    connectionLabels[connection.id] = label;
+
+    console.log(`Added connection ${connection.id} with label:`, label);
+
     triggerSync();
     return line;
+}
+
+function createTextSprite(text) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;  // Increased width
+    canvas.height = 128; // Increased height
+    
+    const context = canvas.getContext('2d');
+    context.font = 'Bold 64px Arial';
+    context.fillStyle = 'rgba(255,255,255,0.95)';
+    context.textBaseline = 'middle';
+    context.textAlign = 'center';
+    
+    // Draw text
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    
+    sprite.scale.set(30, 7.5, 1); // Adjusted scale
+    
+    return sprite;
 }
 
 export function addConnectionToScene(connectionId) {
     if (lines[connectionId] && !scene.getObjectById(lines[connectionId].id)) {
         scene.add(lines[connectionId]);
+        if (connectionLabels[connectionId]) {
+            scene.add(connectionLabels[connectionId]);
+        }
     }
 }
 
-export function clearConnections() {
-    Object.values(lines).forEach(line => {
-        scene.remove(line);
-    });
-    lines = {};
-    loadedConnections.clear();
-}
-
-
-/**
- * Adds a new connection between two nodes.
- * This function is now called internally by the UI manager when the user
- * completes the two-step node selection process in connection mode.
- * 
- * @param {string} fromNodeId - The ID of the source node
- * @param {string} toNodeId - The ID of the target node
- * @param {string} type - The type of connection (default: "Default")
- * @returns {Object} The created connection object
- */
 export function addNewConnection(fromNodeId, toNodeId, type = "Default") {
     const newConnection = {
         id: Date.now().toString(),
@@ -118,7 +167,44 @@ export function updateNodeConnections(nodeId, newPosition) {
 
                 line.geometry.attributes.position.needsUpdate = true;
                 line.geometry.computeBoundingSphere();
+
+                // Update label position
+                const label = connectionLabels[line.userData.id];
+                if (label && label.position) {
+                    const midpoint = new THREE.Vector3(
+                        (positions[0] + positions[3]) / 2,
+                        (positions[1] + positions[4]) / 2,
+                        (positions[2] + positions[5]) / 2
+                    );
+                    label.position.copy(midpoint);
+                }
             }
         }
     });
 }
+
+export function toggleConnectionLabels() {
+    isConnectionLabelsVisible = !isConnectionLabelsVisible;
+    Object.values(connectionLabels).forEach(label => {
+        if (label) {
+            label.visible = isConnectionLabelsVisible;
+        }
+    });
+    console.log(`Connection labels visibility set to: ${isConnectionLabelsVisible}`);
+}
+
+export function clearConnections() {
+    Object.values(lines).forEach(line => {
+        scene.remove(line);
+    });
+    Object.values(connectionLabels).forEach(label => {
+        if (label) {
+            scene.remove(label);
+        }
+    });
+    lines = {};
+    connectionLabels = {};
+    loadedConnections.clear();
+    console.log('Cleared all connections and labels');
+}
+
