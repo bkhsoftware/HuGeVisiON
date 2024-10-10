@@ -1,14 +1,16 @@
-import { scene, camera } from './core.js';
+import { scene, raycaster, mouse, camera } from './core.js';
 import { getNodes, nodes } from './nodeManager.js';
 import { getColorForConnectionType } from './utils.js';
 import { MAX_CONNECTIONS } from './config.js';
 import * as THREE from './lib/three.module.js';
 import { triggerSync } from './dataSync.js';
+import { showInfoPanelWithDelay, hideInfoPanelWithDelay } from './uiManager.js';
 
 export let lines = {};
 export let loadedConnections = new Set();
 let connectionLabels = {};
 let isConnectionLabelsVisible = true;
+let hoveredConnection = null;
 
 export function initConnectionManager() {
     // ... (existing connection-related initialization)
@@ -16,6 +18,32 @@ export function initConnectionManager() {
 
 export function getLines() {
     return lines;
+}
+
+export function checkConnectionHover() {
+    raycaster.setFromCamera(mouse, camera);
+    const lineObjects = Object.values(lines);
+    const intersects = raycaster.intersectObjects(lineObjects);
+
+    if (intersects.length > 0) {
+        const closestConnection = intersects[0].object;
+        if (closestConnection !== hoveredConnection) {
+            if (hoveredConnection) {
+                hoveredConnection.material.linewidth = 1;
+            }
+            hoveredConnection = closestConnection;
+            hoveredConnection.material.linewidth = 2;
+            showInfoPanelWithDelay(hoveredConnection);
+        }
+    } else if (hoveredConnection) {
+        hoveredConnection.material.linewidth = 1;
+        hoveredConnection = null;
+        hideInfoPanelWithDelay();
+    }
+}
+
+export function getHoveredConnection() {
+    return hoveredConnection;
 }
 
 export function updateConnectionLabels() {

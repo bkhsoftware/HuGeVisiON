@@ -4,7 +4,7 @@ import { updateCamera } from './cameraControls.js';
 import { checkNodeClick, checkNodeHover, getNodes, updateLabels } from './nodeManager.js';
 import { loadNodesInView } from './dataLoader.js';
 import { loadDataset } from './datasetManager.js';
-import { updateConnectionLabels } from './connectionManager.js';
+import { checkConnectionHover, updateConnectionLabels } from './connectionManager.js';
 import { handleConnectionClick } from './modeManager.js';
 
 export let controls;
@@ -105,6 +105,7 @@ export function animate() {
       controls.update();
       updateCamera();
       checkNodeHover();
+      checkConnectionHover();
       updateLabels();
       updateConnectionLabels();
       const nodes = getNodes();

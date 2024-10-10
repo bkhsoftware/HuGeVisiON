@@ -269,9 +269,23 @@ export function saveNodeInfo(nodeId) {
     });
 }
 
-export function positionInfoPanelAtNode(node) {
+function positionInfoPanelAtObject(object) {
     const vector = new THREE.Vector3();
-    node.getWorldPosition(vector);
+    
+    if (object.type === 'Line') {
+        // For connections, use the midpoint
+        const start = new THREE.Vector3(object.geometry.attributes.position.array[0], 
+                                        object.geometry.attributes.position.array[1], 
+                                        object.geometry.attributes.position.array[2]);
+        const end = new THREE.Vector3(object.geometry.attributes.position.array[3], 
+                                      object.geometry.attributes.position.array[4], 
+                                      object.geometry.attributes.position.array[5]);
+        vector.addVectors(start, end).multiplyScalar(0.5);
+    } else {
+        // For nodes, use the node's position
+        object.getWorldPosition(vector);
+    }
+    
     vector.project(camera);
 
     const widthHalf = window.innerWidth / 2;
@@ -280,17 +294,17 @@ export function positionInfoPanelAtNode(node) {
     let x = (vector.x * widthHalf) + widthHalf;
     let y = -(vector.y * heightHalf) + heightHalf;
 
-    // Position the panel above the node
-    y -= 20; // Offset to position above the node
+    // Position the panel above the object
+    y -= 20;
 
     // Ensure the panel stays within the window bounds
     const panelRect = infoPanel.getBoundingClientRect();
     x = Math.max(panelRect.width / 2, Math.min(x, window.innerWidth - panelRect.width / 2));
-    y = Math.max(panelRect.height, Math.min(y, window.innerHeight - 20)); // 20px margin from bottom
+    y = Math.max(panelRect.height, Math.min(y, window.innerHeight - 20));
 
     infoPanel.style.left = `${x}px`;
     infoPanel.style.top = `${y}px`;
-    infoPanel.style.transform = 'translate(-50%, -100%)'; // Center horizontally and position above
+    infoPanel.style.transform = 'translate(-50%, -100%)';
 
     // Ensure the panel is fully visible
     keepPanelInView(infoPanel);
@@ -317,13 +331,35 @@ function keepPanelInView(panel) {
     }
 }
 
-export function showInfoPanelWithDelay(node) {
+export function showInfoPanelWithDelay(object) {
     clearTimeout(infoPanelTimeout);
     clearTimeout(infoPanelHideTimeout);
     infoPanelTimeout = setTimeout(() => {
-        showNodeInfo(node);
-        positionInfoPanelAtNode(node);
+        if (object.type === 'Line') {
+            showConnectionInfo(object);
+        } else {
+            showNodeInfo(object);
+        }
+        positionInfoPanelAtObject(object);
     }, SHOW_DELAY);
+}
+
+function showConnectionInfo(connection) {
+    const connectionData = connection.userData;
+    
+    let infoHTML = `
+        <h3>${connectionData.name || 'Unnamed Connection'}</h3>
+        <p>Type: ${connectionData.type || 'Unspecified'}</p>
+        <p>From: ${connectionData.from_node_id}</p>
+        <p>To: ${connectionData.to_node_id}</p>
+        <button id="editConnectionButton">Edit</button>
+    `;
+
+    infoPanel.innerHTML = infoHTML;
+
+    document.getElementById('editConnectionButton').addEventListener('click', () => showConnectionEditPanel(connectionData));
+
+    infoPanel.style.display = 'block';
 }
 
 export function hideInfoPanelWithDelay() {
