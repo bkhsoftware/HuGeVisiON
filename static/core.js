@@ -1,10 +1,10 @@
 import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
-
 import { updateCamera } from './cameraControls.js';
-import { checkNodeClick, checkNodeHover, updateLabels } from './nodeManager.js';
+import { checkNodeClick, checkNodeHover, getNodes, updateLabels } from './nodeManager.js';
 import { loadNodesInView } from './dataLoader.js';
 import { loadDataset } from './datasetManager.js';
+import { updateConnectionLabels } from './connectionManager.js';
 
 export let controls;
 export let mouse;
@@ -102,6 +102,13 @@ export function animate() {
       updateCamera();
       checkNodeHover();
       updateLabels();
+      updateConnectionLabels();
+      const nodes = getNodes();
+      if (nodes) {
+          // Perform operations with nodes
+      } else {
+          console.warn('Nodes object is undefined');
+      }
       renderer.render(scene, camera);
     } catch (error) {
         console.error("Error in animation loop:", error);

@@ -1,5 +1,5 @@
-import { scene } from './core.js';
-import { nodes } from './nodeManager.js';
+import { scene, camera } from './core.js';
+import { getNodes, nodes } from './nodeManager.js';
 import { getColorForConnectionType } from './utils.js';
 import { MAX_CONNECTIONS } from './config.js';
 import * as THREE from './lib/three.module.js';
@@ -19,29 +19,39 @@ export function getLines() {
 }
 
 export function updateConnectionLabels() {
-    Object.entries(connectionLabels).forEach(([id, label]) => {
+    const nodes = getNodes();
+    Object.entries(lines).forEach(([id, line]) => {
+        if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) {
+            console.warn(`Invalid line for connection ${id}. Skipping label update.`);
+            return;
+        }
+
+        let label = connectionLabels[id];
         if (!label) {
-            console.warn(`Label for connection ${id} is undefined`);
+            label = createTextSprite(line.userData.type);
+            scene.add(label);
+            connectionLabels[id] = label;
+        }
+
+        const positions = line.geometry.attributes.position.array;
+        if (positions.length < 6) {
+            console.warn(`Invalid position data for connection ${id}. Skipping label update.`);
             return;
         }
-        if (!label.position) {
-            console.warn(`Label for connection ${id} has no position property`);
-            return;
-        }
-        if (!label.visible) {
-            return; // Skip invisible labels
-        }
-        
-        try {
-            const distance = camera.position.distanceTo(label.position);
-            const scale = Math.max(1, 15 / Math.sqrt(distance));
-            label.scale.set(30 * scale, 7.5 * scale, 1);
-            
-            // Make label always face the camera
-            label.quaternion.copy(camera.quaternion);
-        } catch (error) {
-            console.error(`Error updating label for connection ${id}:`, error);
-        }
+
+        const midpoint = new THREE.Vector3(
+            (positions[0] + positions[3]) / 2,
+            (positions[1] + positions[4]) / 2,
+            (positions[2] + positions[5]) / 2
+        );
+
+        label.position.copy(midpoint);
+        label.visible = isConnectionLabelsVisible;
+
+        const distance = camera.position.distanceTo(midpoint);
+        const scale = Math.max(1, 15 / Math.sqrt(distance));
+        label.scale.set(30 * scale, 7.5 * scale, 1);
+        label.quaternion.copy(camera.quaternion);
     });
 }
 
@@ -50,17 +60,14 @@ export function addConnection(connection, addToScene = true) {
     const endNode = nodes[connection.to_node_id];
 
     if (!startNode || !endNode) {
+        console.warn('Cannot add connection: one or both nodes not found', connection);
         return null;
     }
 
     const start = startNode.position;
     const end = endNode.position;
 
-    const points = [];
-    points.push(new THREE.Vector3(start.x, start.y, start.z));
-    points.push(new THREE.Vector3(end.x, end.y, end.z));
-
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
     const material = new THREE.LineBasicMaterial({
         color: getColorForConnectionType(connection.type),
         linewidth: 3,
@@ -76,43 +83,10 @@ export function addConnection(connection, addToScene = true) {
     lines[connection.id] = line;
     loadedConnections.add(connection.id);
 
-    // Add label
-    const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-    const label = createTextSprite(connection.type);
-    label.position.copy(midpoint);
-    label.visible = isConnectionLabelsVisible;
-    if (addToScene) {
-        scene.add(label);
-    }
-    connectionLabels[connection.id] = label;
-
-    console.log(`Added connection ${connection.id} with label:`, label);
-
+    // Label will be created in updateConnectionLabels
+    
     triggerSync();
     return line;
-}
-
-function createTextSprite(text) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;  // Increased width
-    canvas.height = 128; // Increased height
-    
-    const context = canvas.getContext('2d');
-    context.font = 'Bold 64px Arial';
-    context.fillStyle = 'rgba(255,255,255,0.95)';
-    context.textBaseline = 'middle';
-    context.textAlign = 'center';
-    
-    // Draw text
-    context.fillText(text, canvas.width / 2, canvas.height / 2);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(spriteMaterial);
-    
-    sprite.scale.set(30, 7.5, 1); // Adjusted scale
-    
-    return sprite;
 }
 
 export function addConnectionToScene(connectionId) {
@@ -152,7 +126,6 @@ export function updateNodeConnections(nodeId, newPosition) {
             const endNode = nodes[line.userData.to_node_id];
             
             if (startNode && endNode) {
-                // Update the existing line geometry
                 const positions = line.geometry.attributes.position.array;
                 
                 if (line.userData.from_node_id === nodeId) {
@@ -167,20 +140,11 @@ export function updateNodeConnections(nodeId, newPosition) {
 
                 line.geometry.attributes.position.needsUpdate = true;
                 line.geometry.computeBoundingSphere();
-
-                // Update label position
-                const label = connectionLabels[line.userData.id];
-                if (label && label.position) {
-                    const midpoint = new THREE.Vector3(
-                        (positions[0] + positions[3]) / 2,
-                        (positions[1] + positions[4]) / 2,
-                        (positions[2] + positions[5]) / 2
-                    );
-                    label.position.copy(midpoint);
-                }
             }
         }
     });
+
+    // Labels will be updated in updateConnectionLabels
 }
 
 export function toggleConnectionLabels() {
@@ -190,7 +154,6 @@ export function toggleConnectionLabels() {
             label.visible = isConnectionLabelsVisible;
         }
     });
-    console.log(`Connection labels visibility set to: ${isConnectionLabelsVisible}`);
 }
 
 export function clearConnections() {
@@ -198,13 +161,29 @@ export function clearConnections() {
         scene.remove(line);
     });
     Object.values(connectionLabels).forEach(label => {
-        if (label) {
-            scene.remove(label);
-        }
+        scene.remove(label);
     });
     lines = {};
     connectionLabels = {};
     loadedConnections.clear();
-    console.log('Cleared all connections and labels');
 }
 
+function createTextSprite(text) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    
+    const context = canvas.getContext('2d');
+    context.font = 'Bold 32px Arial';
+    context.fillStyle = 'white';
+    context.textAlign = 'center';
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    
+    sprite.scale.set(15, 3.75, 1);
+    
+    return sprite;
+}
