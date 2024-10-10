@@ -4,15 +4,27 @@ import { getLines, addConnection, loadedConnections, clearConnections } from './
 import { genealogyMode } from './modes/genealogyMode.js';
 import { AIKnowledgeBaseMode } from './modes/AIKnowledgeBaseMode.js';
 import { loadDataset } from './dataLoader.js';
+import { showConnectionEditPanel } from './uiManager.js';
 
 const plugins = {};
 let currentMode = null;
 const modes = {};
 
 export function initModeManager() {
-    registerMode('No Mode', { name: 'No Mode', activate: () => {}, deactivate: () => {} });
-    registerMode('Genealogy', genealogyMode);
-    registerMode('AI Knowledge Base', AIKnowledgeBaseMode);
+    registerMode('No Mode', { 
+        name: 'No Mode', 
+        activate: () => {}, 
+        deactivate: () => {},
+        connectionTypes: ['Default']
+    });
+    registerMode('Genealogy', {
+        ...genealogyMode,
+        connectionTypes: ['Parent-Child', 'Spouse']
+    });
+    registerMode('AI Knowledge Base', {
+        ...AIKnowledgeBaseMode,
+        connectionTypes: ['IsA', 'HasA', 'PartOf', 'RelatedTo', 'Implements', 'DependsOn', 'Improves', 'Contradicts']
+    });
 
     const modeSelect = document.getElementById('modeSelect');
     if (modeSelect) {
@@ -175,6 +187,25 @@ function clearVisualization() {
     clearConnections();
     // Update the scene
     updateVisualization();
+}
+
+export function handleConnectionClick(event) {
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    // Calculate mouse position in normalized device coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, scene.camera);
+
+    const lines = Object.values(getLines());
+    const intersects = raycaster.intersectObjects(lines);
+
+    if (intersects.length > 0) {
+        const clickedConnection = intersects[0].object;
+        showConnectionEditPanel(clickedConnection.userData);
+    }
 }
 
 export { currentMode };

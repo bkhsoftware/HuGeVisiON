@@ -1,11 +1,12 @@
 import { scene, camera, refreshScene } from './core.js';
 import { nodes, addNode, addNewNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
-import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections, toggleConnectionLabels } from './connectionManager.js';
+import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections, updateConnection, deleteConnection, toggleConnectionLabels } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
 import { focusOnAllNodes } from './cameraControls.js';
 import { MAX_CONNECTIONS, MAX_NODES, RENDER_DISTANCE, setMaxConnections, setMaxNodes, setRenderDistance } from './config.js';
 import * as THREE from './lib/three.module.js';
 import { clearExistingData, fetchDatasets as fetchDatasetsFromManager, loadDataset } from './datasetManager.js';
+import { getCurrentMode } from './modeManager.js';
 
 
 export let infoPanel;
@@ -547,3 +548,51 @@ async function fetchDatasets() {
     }
 }
 
+export function showConnectionEditPanel(connectionData) {
+    const currentMode = getCurrentMode();
+    const panel = document.createElement('div');
+    panel.id = 'connectionEditPanel';
+    panel.style.position = 'absolute';
+    panel.style.right = '10px';
+    panel.style.top = '10px';
+    panel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    panel.style.color = 'white';
+    panel.style.padding = '10px';
+    panel.style.borderRadius = '5px';
+
+    let typeOptions = ['Default'];
+    if (currentMode && currentMode.connectionTypes) {
+        typeOptions = currentMode.connectionTypes;
+    }
+
+    panel.innerHTML = `
+        <h3>Edit Connection</h3>
+        <label for="connectionName">Name:</label>
+        <input type="text" id="connectionName" value="${connectionData.name || ''}"><br>
+        <label for="connectionType">Type:</label>
+        <select id="connectionType">
+            ${typeOptions.map(type => `<option value="${type}" ${connectionData.type === type ? 'selected' : ''}>${type}</option>`).join('')}
+        </select><br>
+        <button id="saveConnectionBtn">Save</button>
+        <button id="deleteConnectionBtn">Delete</button>
+        <button id="closeEditPanelBtn">Close</button>
+    `;
+
+    document.body.appendChild(panel);
+
+    document.getElementById('saveConnectionBtn').addEventListener('click', () => {
+        const name = document.getElementById('connectionName').value;
+        const type = document.getElementById('connectionType').value;
+        updateConnection(connectionData.id, { name, type });
+        panel.remove();
+    });
+
+    document.getElementById('deleteConnectionBtn').addEventListener('click', () => {
+        deleteConnection(connectionData.id);
+        panel.remove();
+    });
+
+    document.getElementById('closeEditPanelBtn').addEventListener('click', () => {
+        panel.remove();
+    });
+}

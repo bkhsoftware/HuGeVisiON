@@ -5,6 +5,7 @@ import { checkNodeClick, checkNodeHover, getNodes, updateLabels } from './nodeMa
 import { loadNodesInView } from './dataLoader.js';
 import { loadDataset } from './datasetManager.js';
 import { updateConnectionLabels } from './connectionManager.js';
+import { handleConnectionClick } from './modeManager.js';
 
 export let controls;
 export let mouse;
@@ -39,7 +40,10 @@ export function initCore() {
     initializeSceneLights();
 
     renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
-    renderer.domElement.addEventListener('click', checkNodeClick);
+    renderer.domElement.addEventListener('click', (event) => {
+        checkNodeClick(event);
+        handleConnectionClick(event);
+    });
 
     loadNodesInView();
 }

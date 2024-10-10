@@ -89,6 +89,42 @@ export function addConnection(connection, addToScene = true) {
     return line;
 }
 
+export function updateConnection(id, newData) {
+    const connection = lines[id];
+    if (connection) {
+        connection.userData = { ...connection.userData, ...newData };
+        connection.material.color.setHex(getColorForConnectionType(newData.type));
+        updateConnectionLabel(connection);
+        triggerSync();
+    }
+}
+
+function updateConnectionLabel(connection) {
+    const label = connectionLabels[connection.userData.id];
+    if (label) {
+        const newLabel = createTextSprite(connection.userData.name || connection.userData.type);
+        newLabel.position.copy(label.position);
+        newLabel.scale.copy(label.scale);
+        scene.remove(label);
+        scene.add(newLabel);
+        connectionLabels[connection.userData.id] = newLabel;
+    }
+}
+
+export function deleteConnection(id) {
+    const connection = lines[id];
+    if (connection) {
+        scene.remove(connection);
+        delete lines[id];
+        if (connectionLabels[id]) {
+            scene.remove(connectionLabels[id]);
+            delete connectionLabels[id];
+        }
+        loadedConnections.delete(id);
+        triggerSync();
+    }
+}
+
 export function addConnectionToScene(connectionId) {
     if (lines[connectionId] && !scene.getObjectById(lines[connectionId].id)) {
         scene.add(lines[connectionId]);
