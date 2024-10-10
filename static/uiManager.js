@@ -1,4 +1,4 @@
-import { scene, camera, refreshScene } from './core.js';
+import { scene, camera, mouse, refreshScene } from './core.js';
 import { nodes, addNode, addNewNode, pinnedNode, setPinnedNode, setShowLabels } from './nodeManager.js';
 import { lines, loadedConnections, addConnection, addNewConnection, updateNodeConnections, updateConnection, deleteConnection, toggleConnectionLabels } from './connectionManager.js';
 import { getColorForType, updateVisibleElements } from './utils.js';
@@ -13,8 +13,8 @@ export let infoPanel;
 let infoPanelTimeout;
 let infoPanelHideTimeout;
 const SHOW_DELAY = 300;
-const HIDE_DELAY = 800;
-let hoveredNode = null;
+const HIDE_DELAY = 1300;
+let hoveredObject = null;
 let isConnectionMode = false;
 let firstSelectedNode = null;
 
@@ -168,7 +168,7 @@ export function showNodeInfo(node) {
     document.getElementById('pinNodeButton').addEventListener('click', () => togglePinNode(node));
 
     infoPanel.style.display = 'block';
-    positionInfoPanelAtNode(node);
+    positionInfoPanelAtObject(node);
 }
 
 export function togglePinNode(node) {
@@ -312,21 +312,23 @@ function positionInfoPanelAtObject(object) {
 
 function keepPanelInView(panel) {
     const rect = panel.getBoundingClientRect();
-    
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
     if (rect.left < 0) {
         panel.style.left = '0px';
         panel.style.transform = 'translate(0, -100%)';
     }
-    if (rect.right > window.innerWidth) {
-        panel.style.left = `${window.innerWidth - rect.width}px`;
+    if (rect.right > viewportWidth) {
+        panel.style.left = `${viewportWidth - rect.width}px`;
         panel.style.transform = 'translate(0, -100%)';
     }
     if (rect.top < 0) {
         panel.style.top = '0px';
         panel.style.transform = 'translate(-50%, 0)';
     }
-    if (rect.bottom > window.innerHeight) {
-        panel.style.top = `${window.innerHeight - rect.height}px`;
+    if (rect.bottom > viewportHeight) {
+        panel.style.top = `${viewportHeight - rect.height}px`;
         panel.style.transform = 'translate(-50%, 0)';
     }
 }
@@ -334,6 +336,7 @@ function keepPanelInView(panel) {
 export function showInfoPanelWithDelay(object) {
     clearTimeout(infoPanelTimeout);
     clearTimeout(infoPanelHideTimeout);
+    hoveredObject = object;
     infoPanelTimeout = setTimeout(() => {
         if (object.type === 'Line') {
             showConnectionInfo(object);
@@ -365,10 +368,21 @@ function showConnectionInfo(connection) {
 export function hideInfoPanelWithDelay() {
     clearTimeout(infoPanelHideTimeout);
     infoPanelHideTimeout = setTimeout(() => {
-        if (!pinnedNode) {
-            hideNodeInfo();
+        if (!isMouseOverInfoPanel()) {
+            infoPanel.style.display = 'none';
+            hoveredObject = null;
         }
     }, HIDE_DELAY);
+}
+
+function isMouseOverInfoPanel() {
+    const rect = infoPanel.getBoundingClientRect();
+    return (
+        mouse.x >= rect.left &&
+        mouse.x <= rect.right &&
+        mouse.y >= rect.top &&
+        mouse.y <= rect.bottom
+    );
 }
 
 function positionPanelWithinWindow(panel) {
@@ -589,8 +603,6 @@ export function showConnectionEditPanel(connectionData) {
     const panel = document.createElement('div');
     panel.id = 'connectionEditPanel';
     panel.style.position = 'absolute';
-    panel.style.right = '10px';
-    panel.style.top = '10px';
     panel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     panel.style.color = 'white';
     panel.style.padding = '10px';
@@ -616,6 +628,11 @@ export function showConnectionEditPanel(connectionData) {
 
     document.body.appendChild(panel);
 
+    // Position the edit panel near the hovered object
+    if (hoveredObject) {
+        positionPanelAtObject(panel, hoveredObject);
+    }
+
     document.getElementById('saveConnectionBtn').addEventListener('click', () => {
         const name = document.getElementById('connectionName').value;
         const type = document.getElementById('connectionType').value;
@@ -631,4 +648,40 @@ export function showConnectionEditPanel(connectionData) {
     document.getElementById('closeEditPanelBtn').addEventListener('click', () => {
         panel.remove();
     });
+}
+
+function positionPanelAtObject(panel, object) {
+    const vector = new THREE.Vector3();
+    
+    if (object.type === 'Line') {
+        // For connections, use the midpoint
+        const start = new THREE.Vector3(object.geometry.attributes.position.array[0], 
+                                        object.geometry.attributes.position.array[1], 
+                                        object.geometry.attributes.position.array[2]);
+        const end = new THREE.Vector3(object.geometry.attributes.position.array[3], 
+                                      object.geometry.attributes.position.array[4], 
+                                      object.geometry.attributes.position.array[5]);
+        vector.addVectors(start, end).multiplyScalar(0.5);
+    } else {
+        // For nodes, use the node's position
+        object.getWorldPosition(vector);
+    }
+    
+    vector.project(camera);
+
+    const widthHalf = window.innerWidth / 2;
+    const heightHalf = window.innerHeight / 2;
+
+    let x = (vector.x * widthHalf) + widthHalf;
+    let y = -(vector.y * heightHalf) + heightHalf;
+
+    // Position the panel above the object
+    y -= 20;
+
+    panel.style.left = `${x}px`;
+    panel.style.top = `${y}px`;
+    panel.style.transform = 'translate(-50%, -100%)';
+
+    // Ensure the panel is fully visible
+    keepPanelInView(panel);
 }

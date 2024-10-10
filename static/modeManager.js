@@ -1,4 +1,4 @@
-import { scene } from './core.js';
+import { scene, THREE } from './core.js';
 import { getNodes, addNode, clearNodes } from './nodeManager.js';
 import { getLines, addConnection, loadedConnections, clearConnections } from './connectionManager.js';
 import { genealogyMode } from './modes/genealogyMode.js';
