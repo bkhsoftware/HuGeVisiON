@@ -23,7 +23,7 @@ export function initModeManager() {
     });
     registerMode('AI Knowledge Base', {
         ...AIKnowledgeBaseMode,
-        connectionTypes: ['IsA', 'HasA', 'PartOf', 'RelatedTo', 'Implements', 'DependsOn', 'Improves', 'Contradicts']
+        connectionTypes: ['Includes', 'IsA', 'HasA', 'PartOf', 'RelatedTo', 'Implements', 'DependsOn', 'Improves', 'Contradicts', 'Uses']
     });
 
     const modeSelect = document.getElementById('modeSelect');

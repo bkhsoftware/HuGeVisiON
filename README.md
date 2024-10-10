@@ -1,8 +1,8 @@
 # HuGe VisiON (Huge General Visualizer in Open Networks)
 
-Version: 0.3.1
+Version: 0.4.0
 
-HuGe VisiON is a powerful 3D visualization tool designed to present dynamically updated, large and accurate trees of relations which can be browsed online. This project aims to provide a new and exciting way to discover ideas, people, and foster a sense of interconnectedness across various domains.
+HuGe VisiON is a 3D visualization tool designed to present dynamically updated, large and accurate trees of relations which can be browsed online. This project aims to provide a new and exciting way to discover ideas, people, and foster a sense of interconnectedness across various domains.
 
 ## Goal
 
@@ -19,11 +19,15 @@ Present dynamically updated, large and accurate trees of relations which can be 
 - User-adjustable settings for maximum connections, maximum nodes, and render distance
 - Modular architecture supporting different visualization modes
 - AI Knowledge Base mode as an example of a specialized visualization mode
+- Genealogy mode for visualizing family trees
 - Default dataset creation and loading
 - Improved data persistence across page refreshes
-- Enhanced label visibility for nodes
+- Enhanced label visibility for nodes and connections
 - JSON data import and export functionality
-- Genealogy mode
+- Editable connections with type-based representation
+- Mode-specific connection type handling
+- Connection hover functionality with info panel display
+- Connection edit panel for modifying and deleting connections
 
 ## Prerequisites
 

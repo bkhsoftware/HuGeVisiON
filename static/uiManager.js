@@ -351,7 +351,7 @@ function showConnectionInfo(connection) {
     const connectionData = connection.userData;
     
     let infoHTML = `
-        <h3>${connectionData.name || 'Unnamed Connection'}</h3>
+        <h3>Connection</h3>
         <p>Type: ${connectionData.type || 'Unspecified'}</p>
         <p>From: ${connectionData.from_node_id}</p>
         <p>To: ${connectionData.to_node_id}</p>
@@ -608,19 +608,22 @@ export function showConnectionEditPanel(connectionData) {
     panel.style.padding = '10px';
     panel.style.borderRadius = '5px';
 
-    let typeOptions = ['Default'];
-    if (currentMode && currentMode.connectionTypes) {
-        typeOptions = currentMode.connectionTypes;
+    let typeInput;
+    if (currentMode.name === 'No Mode') {
+        typeInput = `<input type="text" id="connectionType" value="${connectionData.type || ''}">`;
+    } else {
+        const typeOptions = currentMode.connectionTypes || ['Default'];
+        typeInput = `
+            <select id="connectionType">
+                ${typeOptions.map(type => `<option value="${type}" ${connectionData.type === type ? 'selected' : ''}>${type}</option>`).join('')}
+            </select>
+        `;
     }
 
     panel.innerHTML = `
         <h3>Edit Connection</h3>
-        <label for="connectionName">Name:</label>
-        <input type="text" id="connectionName" value="${connectionData.name || ''}"><br>
         <label for="connectionType">Type:</label>
-        <select id="connectionType">
-            ${typeOptions.map(type => `<option value="${type}" ${connectionData.type === type ? 'selected' : ''}>${type}</option>`).join('')}
-        </select><br>
+        ${typeInput}<br>
         <button id="saveConnectionBtn">Save</button>
         <button id="deleteConnectionBtn">Delete</button>
         <button id="closeEditPanelBtn">Close</button>
@@ -634,9 +637,8 @@ export function showConnectionEditPanel(connectionData) {
     }
 
     document.getElementById('saveConnectionBtn').addEventListener('click', () => {
-        const name = document.getElementById('connectionName').value;
         const type = document.getElementById('connectionType').value;
-        updateConnection(connectionData.id, { name, type });
+        updateConnection(connectionData.id, { type });
         panel.remove();
     });
 

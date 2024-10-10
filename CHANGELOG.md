@@ -4,12 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-
+## [0.4.0] - 2024-09-15
 ### Added
+- Implemented editable connections with type-based representation
+- Added hover functionality for connections with info panel display
+- Introduced mode-specific connection type handling (dropdown for specific modes, text input for 'No Mode')
+- Implemented connection edit panel for modifying connection types
+- Added ability to delete connections through the edit panel
 - Genealogy mode
+- AI Knowledge Base mode
+
+### Changed
+- Simplified connection representation by merging name and type into a single 'type' property
+- Improved connection hover detection to only trigger for the middle 66% of the connection
+- Enhanced UI interaction for connections to be more consistent with node interactions
+- Updated AI Knowledge Base mode to include specific connection types
+- Refined Genealogy mode with predefined connection types
 
 ### Fixed
+- Resolved issues with accidental triggering of connection info panels when hovering near nodes
+- Improved positioning of connection edit panels to appear near the hovered connection
 - Default data loaded without being selected
 
 ## [0.3.1] - 2024-09-01

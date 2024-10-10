@@ -26,20 +26,46 @@ export function checkConnectionHover() {
     const intersects = raycaster.intersectObjects(lineObjects);
 
     if (intersects.length > 0) {
-        const closestConnection = intersects[0].object;
-        if (closestConnection !== hoveredConnection) {
+        const closestIntersection = intersects[0];
+        const connection = closestIntersection.object;
+        
+        if (isWithinMiddle66Percent(connection, closestIntersection.point)) {
+            if (connection !== hoveredConnection) {
+                if (hoveredConnection) {
+                    hoveredConnection.material.linewidth = 1;
+                }
+                hoveredConnection = connection;
+                hoveredConnection.material.linewidth = 2;
+                showInfoPanelWithDelay(hoveredConnection);
+            }
+        } else {
             if (hoveredConnection) {
                 hoveredConnection.material.linewidth = 1;
+                hoveredConnection = null;
+                hideInfoPanelWithDelay();
             }
-            hoveredConnection = closestConnection;
-            hoveredConnection.material.linewidth = 2;
-            showInfoPanelWithDelay(hoveredConnection);
         }
     } else if (hoveredConnection) {
         hoveredConnection.material.linewidth = 1;
         hoveredConnection = null;
         hideInfoPanelWithDelay();
     }
+}
+
+function isWithinMiddle66Percent(connection, point) {
+    const positions = connection.geometry.attributes.position.array;
+    const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
+    const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
+    
+    const connectionVector = end.clone().sub(start);
+    const connectionLength = connectionVector.length();
+    
+    const startToPoint = point.clone().sub(start);
+    const projectedLength = startToPoint.projectOnVector(connectionVector).length();
+    
+    const relativePosition = projectedLength / connectionLength;
+    
+    return relativePosition > 0.17 && relativePosition < 0.83;
 }
 
 export function getHoveredConnection() {
@@ -120,7 +146,7 @@ export function addConnection(connection, addToScene = true) {
 export function updateConnection(id, newData) {
     const connection = lines[id];
     if (connection) {
-        connection.userData = { ...connection.userData, ...newData };
+        connection.userData.type = newData.type;
         connection.material.color.setHex(getColorForConnectionType(newData.type));
         updateConnectionLabel(connection);
         triggerSync();
@@ -130,7 +156,7 @@ export function updateConnection(id, newData) {
 function updateConnectionLabel(connection) {
     const label = connectionLabels[connection.userData.id];
     if (label) {
-        const newLabel = createTextSprite(connection.userData.name || connection.userData.type);
+        const newLabel = createTextSprite(connection.userData.type);
         newLabel.position.copy(label.position);
         newLabel.scale.copy(label.scale);
         scene.remove(label);
