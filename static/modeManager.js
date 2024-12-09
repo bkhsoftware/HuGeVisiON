@@ -197,7 +197,12 @@ export function handleConnectionClick(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    raycaster.setFromCamera(mouse, scene.camera);
+    //if (!camera || !camera.isPerspectiveCamera) {
+    //    console.error("Camera is not defined or not a PerspectiveCamera");
+    //    return;
+    // }
+
+    //raycaster.setFromCamera(mouse, scene.camera);
 
     const lines = Object.values(getLines());
     const intersects = raycaster.intersectObjects(lines);

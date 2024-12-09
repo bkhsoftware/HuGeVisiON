@@ -158,19 +158,19 @@ export const genealogyMode = {
         console.log(`Bounding box: X(${minX}, ${maxX}), Y(${minY}, ${maxY}), Z(${minZ}, ${maxZ})`);
     },
     layoutNodesAsTree: function(nodes, connections) {
-        console.log("Starting improved layoutNodesAsTree");
-        console.log("Input nodes:", nodes);
-        console.log("Input connections:", connections);
+        const NODE_SPACING = 5000; // Spacing between siblings/individuals on X-axis
+        const SPOUSE_SPACING = 3000; // Spacing between spouses on Y-axis
+        const YEAR_SPACING = 1; // Scaling for birth years on Z-axis
 
-        const LEVEL_SPACING = 100;  // Vertical spacing between generations
-        const NODE_SPACING = 50;    // Horizontal spacing between siblings
-        const TREE_SPACING = 50;   // Horizontal spacing between separate family trees
-        const SPOUSE_SPACING = 30;  // Horizontal spacing between spouses
-
-        // Helper function to build node map and relationships
+        // Build the node map and relationships
         function buildNodeMap(nodes, connections) {
-            const nodeMap = new Map(nodes.map(node => [node.id, { ...node, children: [], parents: [], spouses: [], level: 0, x: 0, y: 0, z: 0 }]));
-            
+            const nodeMap = new Map(nodes.map(node => [node.id, {
+                ...node,
+                children: [],
+                spouses: [],
+                x: 0, y: 0, z: 0 // Adding coordinates
+            }]));
+
             connections.forEach(conn => {
                 if (conn.type === 'Parent-Child') {
                     const parent = nodeMap.get(conn.from_node_id);
@@ -188,133 +188,71 @@ export const genealogyMode = {
                     }
                 }
             });
-
             return nodeMap;
         }
 
-        // Helper function to find and sort root nodes
-        function findAndSortRootNodes(nodeMap) {
-            const rootNodes = Array.from(nodeMap.values()).filter(node => node.parents.length === 0);
-            console.log("Root nodes before sorting:", rootNodes);  // Add this debug line
-            const sortedRootNodes = rootNodes.sort((a, b) => (a.birthYear || 0) - (b.birthYear || 0));
-            console.log("Root nodes after sorting:", sortedRootNodes);  // Add this debug line
-            return sortedRootNodes;
-        }
-
-        // Helper function to assign levels (generations)
-        function assignLevels(node, level = 0, visited = new Set()) {
-            if (visited.has(node.id)) return;
-            visited.add(node.id);
-            
-            node.level = Math.max(node.level, level);
-            node.children.forEach(child => assignLevels(child, level + 1, visited));
-            node.spouses.forEach(spouse => assignLevels(spouse, level, visited));
-        }
-
-        // Helper function to calculate vertical positions
-        function calculateVerticalPositions(nodeMap) {
-            const levelMap = new Map();
+        // Position nodes based on birth year on Z-axis
+        function positionNodes(nodeMap) {
             nodeMap.forEach(node => {
-                if (!levelMap.has(node.level)) {
-                    levelMap.set(node.level, []);
-                }
-                levelMap.get(node.level).push(node);
+                node.z = (node.birthYear || 0) * YEAR_SPACING; // Birth year -> Z-axis
             });
+        }
 
-            levelMap.forEach((nodesInLevel, level) => {
-                console.log(`Calculating vertical positions for level ${level}`);  // Add this debug line
-                console.log("Nodes in level before sorting:", nodesInLevel);  // Add this debug line
-                nodesInLevel.sort((a, b) => (a.birthYear || 0) - (b.birthYear || 0));
-                console.log("Nodes in level after sorting:", nodesInLevel);  // Add this debug line
-                nodesInLevel.forEach((node, index) => {
-                    node.y = -level * LEVEL_SPACING - index * (LEVEL_SPACING / (nodesInLevel.length + 1));
-                    console.log(`Node ${node.id} positioned at y=${node.y}`);  // Add this debug line
+        // Position spouses along Y-axis
+        function positionSpouses(nodeMap) {
+            nodeMap.forEach(node => {
+                node.spouses.forEach((spouse, index) => {
+                    spouse.y = node.y + (index + 1) * SPOUSE_SPACING; // Y-axis spacing for spouses
+                    spouse.x = node.x; // Keep spouses aligned on X-axis
+                    spouse.z = node.z; // Same birth year
                 });
             });
         }
 
-        // Helper function to layout a family tree
-        function layoutFamilyTree(node, xOffset = 0, visited = new Set()) {
+        // Lay out families and siblings on the X-axis
+        function layoutFamily(node, xOffset = 0, visited = new Set()) {
             if (visited.has(node.id)) return 0;
             visited.add(node.id);
 
             let totalWidth = NODE_SPACING;
 
-            // Position children
-            if (node.children.length > 0) {
-                const childrenWidth = node.children.reduce((sum, child) => 
-                    sum + layoutFamilyTree(child, xOffset + totalWidth, visited), 0);
-                totalWidth += childrenWidth;
-            }
-
-            // Position node
-            node.x = xOffset + totalWidth / 2;
-
-            // Position spouses
-            node.spouses.forEach((spouse, index) => {
-                if (!visited.has(spouse.id)) {
-                    spouse.x = node.x + (index + 1) * SPOUSE_SPACING;
-                    spouse.y = node.y;
-                    visited.add(spouse.id);
-                }
+            // Recursively position children
+            node.children.forEach(child => {
+                totalWidth += layoutFamily(child, xOffset + totalWidth, visited);
             });
+
+            node.x = xOffset + totalWidth / 2; // Position the node on X-axis
 
             return Math.max(totalWidth, NODE_SPACING);
         }
 
-        // Helper function to handle spouse relationships
-        function handleSpouseRelationships(nodeMap) {
-            nodeMap.forEach(node => {
-                if (node.spouses.length > 0) {
-                    const averageX = node.spouses.reduce((sum, spouse) => sum + spouse.x, node.x) / (node.spouses.length + 1);
-                    node.x = averageX;
-                    node.spouses.forEach(spouse => {
-                        spouse.x = averageX;
-                    });
-                }
-            });
-        }
-
-        // Helper function for final layout adjustments
-        function finalLayoutAdjustments(nodeMap) {
-            // Implement collision detection and resolution if needed
-            // This is a placeholder for potential future improvements
-        }
-
-        // Main layout logic
+        // Apply the layout to the nodes
         const nodeMap = buildNodeMap(nodes, connections);
-        const rootNodes = findAndSortRootNodes(nodeMap);
-
-        rootNodes.forEach(root => assignLevels(root));
-        calculateVerticalPositions(nodeMap);
+        positionNodes(nodeMap); // Position nodes based on birth year
+        positionSpouses(nodeMap); // Position spouses on Y-axis
 
         let xOffset = 0;
-        rootNodes.forEach((root, index) => {
-            const treeWidth = layoutFamilyTree(root, xOffset);
-            xOffset += treeWidth + TREE_SPACING;
+        nodeMap.forEach(node => {
+            xOffset += layoutFamily(node, xOffset); // Lay out the family trees
         });
 
-        handleSpouseRelationships(nodeMap);
-        finalLayoutAdjustments(nodeMap);
-
-        // Adjust vertical positions of family trees based on root node years
-        const minRootYear = Math.min(...rootNodes.map(root => root.birthYear || Infinity));
-        const yearSpacing = LEVEL_SPACING / 2; // Adjust this value to control vertical spacing between trees
-        rootNodes.forEach(root => {
-            const verticalOffset = ((root.birthYear || minRootYear) - minRootYear) * yearSpacing;
-            const adjustNodes = (node, visited = new Set()) => {
-                if (visited.has(node.id)) return;
-                visited.add(node.id);
-                node.y -= verticalOffset;
-                node.children.forEach(child => adjustNodes(child, visited));
-                node.spouses.forEach(spouse => adjustNodes(spouse, visited));
-            };
-            adjustNodes(root);
+        nodeMap.forEach(node => {
+            console.log(`Node: x(${node.x}), y(${node.y}), z(${node.z})`);
         });
 
-        const layoutedNodes = Array.from(nodeMap.values());
-        console.log("Laid out nodes:", layoutedNodes);
-        return layoutedNodes;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+
+        nodeMap.forEach(node => {
+            minX = Math.min(minX, node.x);
+            maxX = Math.max(maxX, node.x);
+            minY = Math.min(minY, node.y);
+            maxY = Math.max(maxY, node.y);
+            minZ = Math.min(minZ, node.z);
+            maxZ = Math.max(maxZ, node.z);
+        });
+
+        console.log(`X Range: (${minX}, ${maxX}), Y Range: (${minY}, ${maxY}), Z Range: (${minZ}, ${maxZ})`);
+        return Array.from(nodeMap.values());
     }
 };
 
